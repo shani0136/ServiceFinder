@@ -52,21 +52,22 @@ export const ProviderDetailsModal: React.FC<ProviderDetailsModalProps> = ({
 
   if (!provider) return null;
 
+  const displayName = provider.name || provider.businessName || 'Service Professional';
   const whatsappUrl = buildWhatsAppUrl(
     provider,
-    problemSummary || provider.service,
-    selectedArea || provider.serviceArea
+    problemSummary || provider.service || '',
+    selectedArea || provider.serviceArea || ''
   );
 
-  const initial = provider.name.charAt(0).toUpperCase();
+  const initial = (displayName.charAt(0) || 'P').toUpperCase();
 
   const handleCallClick = (e: React.MouseEvent) => {
     if (!state.user || state.user.role !== 'customer') {
       e.preventDefault();
       const payload: ContactActionPayload = {
         type: 'call',
-        providerName: provider.name,
-        phone: provider.phone,
+        providerName: displayName,
+        phone: provider.phone || '',
         whatsappUrl,
       };
       if (onRequireLogin) {
@@ -84,8 +85,8 @@ export const ProviderDetailsModal: React.FC<ProviderDetailsModalProps> = ({
       e.preventDefault();
       const payload: ContactActionPayload = {
         type: 'whatsapp',
-        providerName: provider.name,
-        phone: provider.phone,
+        providerName: displayName,
+        phone: provider.phone || '',
         whatsappUrl,
       };
       if (onRequireLogin) {
@@ -209,7 +210,7 @@ export const ProviderDetailsModal: React.FC<ProviderDetailsModalProps> = ({
             {(provider.photoURL || provider.profileImage) ? (
               <img
                 src={provider.photoURL || provider.profileImage}
-                alt={provider.name}
+                alt={displayName}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
@@ -219,7 +220,7 @@ export const ProviderDetailsModal: React.FC<ProviderDetailsModalProps> = ({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0, color: '#0f172a' }}>
-                {provider.name}
+                {displayName}
               </h2>
               {(provider.status === 'approved' || provider.verified) && (
                 <span style={{ background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: 700 }}>

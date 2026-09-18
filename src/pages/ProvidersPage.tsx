@@ -140,15 +140,15 @@ export const ProvidersPage: React.FC<ProvidersPageProps> = ({ onNavigate, onSign
 
   // Filter with client-side keyword search (name, skills)
   const filtered = providers.filter((p) => {
+    if (!p) return false;
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
-    return (
-      p.name.toLowerCase().includes(q) ||
-      (p.businessName && p.businessName.toLowerCase().includes(q)) ||
-      p.service.toLowerCase().includes(q) ||
-      p.serviceArea.toLowerCase().includes(q) ||
-      p.skills?.some((s) => s.toLowerCase().includes(q))
-    );
+    const matchName = p.name ? p.name.toLowerCase().includes(q) : false;
+    const matchBiz = p.businessName ? p.businessName.toLowerCase().includes(q) : false;
+    const matchService = p.service ? p.service.toLowerCase().includes(q) : false;
+    const matchArea = p.serviceArea ? p.serviceArea.toLowerCase().includes(q) : false;
+    const matchSkills = p.skills && Array.isArray(p.skills) ? p.skills.some((s) => s && s.toLowerCase().includes(q)) : false;
+    return matchName || matchBiz || matchService || matchArea || matchSkills;
   });
 
   return (

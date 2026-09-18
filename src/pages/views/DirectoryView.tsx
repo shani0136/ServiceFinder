@@ -50,15 +50,15 @@ export const DirectoryView: React.FC = () => {
   }, [selectedCategory, selectedArea]);
 
   const filteredProviders = providers.filter((p) => {
+    if (!p) return false;
     if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      p.name.toLowerCase().includes(q) ||
-      (p.businessName && p.businessName.toLowerCase().includes(q)) ||
-      p.service.toLowerCase().includes(q) ||
-      p.serviceArea.toLowerCase().includes(q) ||
-      p.skills?.some((s) => s.toLowerCase().includes(q))
-    );
+    const q = searchQuery.toLowerCase().trim();
+    const matchName = p.name ? p.name.toLowerCase().includes(q) : false;
+    const matchBiz = p.businessName ? p.businessName.toLowerCase().includes(q) : false;
+    const matchService = p.service ? p.service.toLowerCase().includes(q) : false;
+    const matchArea = p.serviceArea ? p.serviceArea.toLowerCase().includes(q) : false;
+    const matchSkills = p.skills && Array.isArray(p.skills) ? p.skills.some((s) => s && s.toLowerCase().includes(q)) : false;
+    return matchName || matchBiz || matchService || matchArea || matchSkills;
   });
 
   return (

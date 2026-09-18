@@ -43,21 +43,22 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
     glare: true,
   });
 
+  const displayName = provider?.name || provider?.businessName || 'Service Professional';
   const whatsappUrl = buildWhatsAppUrl(
     provider,
-    problemSummary || provider.service,
-    selectedArea || provider.serviceArea
+    problemSummary || provider?.service || '',
+    selectedArea || provider?.serviceArea || ''
   );
 
-  const initial = provider.name.charAt(0).toUpperCase();
+  const initial = (displayName.charAt(0) || 'P').toUpperCase();
 
   const handleCall = (e: React.MouseEvent) => {
     if (!state.user || state.user.role !== 'customer') {
       e.preventDefault();
       const payload: ContactActionPayload = {
         type: 'call',
-        providerName: provider.name,
-        phone: provider.phone,
+        providerName: displayName,
+        phone: provider?.phone || '',
         whatsappUrl,
       };
       if (onRequireLogin) {
@@ -75,8 +76,8 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
       e.preventDefault();
       const payload: ContactActionPayload = {
         type: 'whatsapp',
-        providerName: provider.name,
-        phone: provider.phone,
+        providerName: displayName,
+        phone: provider?.phone || '',
         whatsappUrl,
       };
       if (onRequireLogin) {
@@ -100,8 +101,8 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
         <div className={styles.headerInfo}>
           <div className={styles.nameRow}>
             <div>
-              <h3 className={styles.name}>{provider.name}</h3>
-              {provider.businessName && (
+              <h3 className={styles.name}>{displayName}</h3>
+              {provider?.businessName && provider?.name && (
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--muted)', display: 'block', fontWeight: 500 }}>
                   {provider.businessName}
                 </span>
