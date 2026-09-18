@@ -166,7 +166,7 @@ export const DashboardPage: React.FC = () => {
             <button
               type="button"
               className={styles.userBtn}
-              onClick={() => setView('profile')}
+              onClick={() => handleNavigateView('profile')}
               aria-label="View user profile"
             >
               <div className={styles.userAvatar}>
