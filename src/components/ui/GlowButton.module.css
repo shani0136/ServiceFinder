@@ -1,0 +1,105 @@
+.btn {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-full);
+  font-family: var(--font);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+  transition: transform var(--t-base), box-shadow var(--t-base), background var(--t-base);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Size variants */
+.sm  { font-size: var(--text-sm);  padding: 8px 20px; }
+.md  { font-size: var(--text-base); padding: 11px 28px; }
+.lg  { font-size: var(--text-base); padding: 14px 40px; }
+
+.fullWidth { width: 100%; }
+
+/* ── Spinning glow ring ────────────────────────────────────────────────── */
+
+/* ::before — the conic-gradient disc that extends 2px beyond the button */
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    transparent   0deg,
+    transparent  60deg,
+    #a5b4fc      90deg,
+    #fff         150deg,
+    var(--accent) 200deg,
+    transparent  260deg,
+    transparent  360deg
+  );
+  animation: spin 3s linear infinite;
+  z-index: -2;
+}
+
+/* ::after — accent-colored fill that covers the button interior,
+   leaving only the outer 2px ring of ::before visible */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: background var(--t-base);
+  z-index: -1;
+}
+
+/* ── Hover & active states ────────────────────────────────────────────── */
+
+.btn:not(.disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md), 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.btn:not(.disabled):hover::after {
+  background: var(--accent-dark);
+}
+
+.btn:not(.disabled):active {
+  transform: translateY(0);
+}
+
+/* ── Disabled state ───────────────────────────────────────────────────── */
+
+.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.disabled::before {
+  animation: none;
+}
+
+/* ── Label ────────────────────────────────────────────────────────────── */
+
+.label {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .btn::before {
+    animation: none;
+    background: var(--accent-light);
+  }
+}

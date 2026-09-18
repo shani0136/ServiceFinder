@@ -1,0 +1,40 @@
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  user-select: none;
+}
+
+.sm .star { font-size: 0.875rem; }
+.md .star { font-size: 1.1rem; }
+.lg .star { font-size: 1.4rem; }
+
+.sm { gap: 0; }
+.md { gap: 1px; }
+.lg { gap: 2px; }
+
+.star {
+  line-height: 1;
+  transition: transform var(--t-fast), color var(--t-fast);
+}
+
+.filled { color: #FBBF24; }
+.empty  { color: var(--border-md); }
+
+.interactive .star {
+  cursor: pointer;
+}
+
+.interactive .star:hover,
+.interactive .star:focus-visible {
+  transform: scale(1.15);
+  color: #FBBF24;
+  outline: none;
+}
+
+.value {
+  margin-left: 4px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--fg-secondary);
+}

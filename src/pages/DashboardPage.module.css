@@ -1,0 +1,146 @@
+.layout {
+  display: flex;
+  min-height: 100dvh;
+  background: transparent;
+  color: var(--fg);
+}
+
+.mainArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-left: var(--sidebar-w, 240px);
+  transition: margin-left var(--t-base);
+}
+
+/* ── Top Header Bar ──────────────────────────────────────────────────────── */
+
+.topBar {
+  height: 64px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-6);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.barLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.hamburgerBtn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+  padding: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+.breadcrumb {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--fg);
+  text-transform: capitalize;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.breadcrumbBadge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+}
+
+.barRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.emergencyBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--error);
+  background: var(--error-bg);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 6px 14px;
+  border-radius: var(--r-full);
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.emergencyBtn:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.emergencyBtnActive {
+  background: var(--error);
+  color: #fff;
+  border-color: var(--error);
+}
+
+.userBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--fg);
+}
+
+.userAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Content Container ───────────────────────────────────────────────────── */
+
+.content {
+  flex: 1;
+  padding: var(--space-6);
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .mainArea {
+    margin-left: 0;
+  }
+  .hamburgerBtn {
+    display: flex;
+  }
+  .topBar {
+    padding: 0 var(--space-4);
+  }
+  .content {
+    padding: var(--space-4);
+  }
+}

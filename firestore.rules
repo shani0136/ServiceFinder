@@ -1,0 +1,188 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Core Authentication & Authorization Helpers ──────────────────────────
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Admin authorization: ONLY via server-minted Firebase Custom Claims (admin: true),
+    // cryptographically verified Firebase token email for authorized project admins,
+    // or through the secure /admins/{uid} collection.
+    // NO CLIENT OR FRONTEND CAN SET OR FAKE THIS.
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        request.auth.token.email == 'shani145@gmail.com' ||
+        request.auth.token.email == 'shanisharma145@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Provider role helper:
+    // Identifies if the authenticated user has role == 'provider' in users/{uid},
+    // or exists in providers/{uid} or providers_draft/{uid}.
+    // NO PROVIDER CAN BYPASS THIS TO BROWSE OTHER PROVIDERS.
+    function isProvider() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'provider') ||
+        exists(/databases/$(database)/documents/providers_draft/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/providers/$(request.auth.uid))
+      );
+    }
+
+    // ─── Centralized Service & Location Catalog Validation ───────────────────
+    function isAllowedService(service) {
+      return service in [
+        'Electrician',
+        'Plumber',
+        'Carpenter',
+        'Painter',
+        'AC & Appliance Repair',
+        'Refrigerator Repair',
+        'Washing Machine Repair',
+        'RO / Water Purifier Repair',
+        'TV Repair',
+        'Computer & Laptop Repair',
+        'Mobile Repair',
+        'Vehicle Mechanic',
+        'Home Cleaning',
+        'Pest Control'
+      ];
+    }
+
+    function isAllowedLocation(loc) {
+      return loc in [
+        'Churchgate',
+        'Marine Lines',
+        'Charni Road',
+        'Grant Road',
+        'Mumbai Central',
+        'Mahalaxmi',
+        'Lower Parel',
+        'Prabhadevi',
+        'Dadar',
+        'Matunga Road',
+        'Mahim',
+        'Bandra',
+        'Khar',
+        'Santacruz',
+        'Vile Parle',
+        'Andheri',
+        'Jogeshwari',
+        'Ram Mandir',
+        'Goregaon',
+        'Malad',
+        'Kandivali',
+        'Borivali',
+        'Dahisar'
+      ];
+    }
+
+    // ─── Admins Collection: admins/{adminId} ─────────────────────────────────
+    // Accessible strictly by verified administrators.
+    // Zero unauthorized client write access allowed.
+    match /admins/{adminId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ─── Users Collection: users/{uid} ───────────────────────────────────────
+    match /users/{userId} {
+      // User can read their own profile; admins can read all
+      allow read: if isOwner(userId) || isAdmin();
+
+      // On creation, public users can ONLY set role to 'customer' or 'provider' (NEVER 'admin')
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.role in ['customer', 'provider'];
+
+      // User can update profile info, but CANNOT change their role or uid (NO ROLE ESCALATION)
+      allow update: if (
+        isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'uid'])
+      ) || isAdmin();
+
+      // Only admins can delete user records
+      allow delete: if isAdmin();
+    }
+
+    // ─── Providers Collection: providers/{providerId} ────────────────────────
+    match /providers/{providerId} {
+      // Read access control:
+      // 1. Administrators retain full access to all provider records.
+      // 2. A provider can read ONLY their own provider document.
+      // 3. Customers and public can read ONLY approved AND available providers for discovery.
+      // 4. A SERVICE PROVIDER is strictly FORBIDDEN from reading or browsing other providers.
+      allow read: if isAdmin()
+        || isOwner(providerId)
+        || (isAuthenticated() && resource.data.uid == request.auth.uid)
+        || (!isProvider() && resource.data.status == 'approved' && (resource.data.available == true || !('available' in resource.data)));
+
+      // Provider creates initial profile:
+      // - Must be authenticated
+      // - status MUST be strictly 'pending'
+      // - verified MUST be false
+      // - rating MUST be null/0 and reviewCount MUST be 0 (cannot forge reputation)
+      // - primaryService and serviceArea MUST match official catalog
+      allow create: if (
+        isAuthenticated()
+        && (request.resource.data.uid == request.auth.uid || providerId == request.auth.uid)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.verified == false
+        && (!('adminVerified' in request.resource.data) || request.resource.data.adminVerified == false)
+        && (request.resource.data.rating == null || request.resource.data.rating == 0)
+        && (!('reviewCount' in request.resource.data) || request.resource.data.reviewCount == 0)
+        && isAllowedService(request.resource.data.primaryService)
+        && isAllowedLocation(request.resource.data.serviceArea)
+      ) || isAdmin();
+
+      // Provider can update their own details, but CANNOT modify protected fields:
+      // status, verified, approvedAt, approvedBy, rating, reviewCount, adminVerified
+      // Provider CAN toggle their own availability (must be boolean)
+      // Only an authorized administrator can approve, reject, or suspend a provider.
+      allow update: if (
+        (isOwner(providerId) || (isAuthenticated() && resource.data.uid == request.auth.uid))
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'status', 'verified', 'approvedAt', 'approvedBy', 'rating', 'reviewCount', 'adminVerified'
+        ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['available']) || request.resource.data.available is bool)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['primaryService']) || isAllowedService(request.resource.data.primaryService))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['serviceArea']) || isAllowedLocation(request.resource.data.serviceArea))
+      ) || isAdmin();
+
+      // Only admins can delete provider records
+      allow delete: if isAdmin();
+    }
+
+    // ─── Providers Draft Collection: providers_draft/{draftId} ──────────────
+    match /providers_draft/{draftId} {
+      allow read: if isOwner(draftId) || isAdmin();
+      allow write: if isOwner(draftId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Reviews Collection: reviews/{reviewId} ──────────────────────────────
+    match /reviews/{reviewId} {
+      // Anyone can read community reviews
+      allow read: if true;
+
+      // Authenticated customers can submit genuine reviews (rating 1 to 5)
+      // Providers are barred from creating reviews for themselves or competitors
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && !isProvider();
+
+      // Reviews cannot be altered by customers or providers; only admins can moderate/delete
+      allow update, delete: if isAdmin();
+    }
+  }
+}
