@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../store/appState';
 import { SERVICE_NAMES } from '../../constants/services';
 import { MUMBAI_LOCATIONS } from '../../constants/locations';
+import { submitCallbackRequest } from '../../lib/directoryService';
 import styles from './ContactUsModal.module.css';
 
 interface ContactUsModalProps {
@@ -70,7 +71,7 @@ export const ContactUsModal: React.FC<ContactUsModalProps> = ({ isOpen, onClose 
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.phone.trim()) {
       addToast('Please enter your name and contact phone number.', 'warning');
@@ -78,15 +79,30 @@ export const ContactUsModal: React.FC<ContactUsModalProps> = ({ isOpen, onClose 
     }
 
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      await submitCallbackRequest({
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        email: formData.email.trim() || undefined,
+        area: formData.area,
+        service: formData.service,
+        role: isProvider ? 'provider' : 'customer',
+        message: formData.message.trim() || undefined,
+        userId: user?.uid,
+      });
+
       setSubmitted(true);
       if (isProvider) {
         addToast('Provider support request received! Our partner relations desk will call you within 15 minutes.', 'success');
       } else {
         addToast('Inquiry submitted! Our Mumbai support desk will reach out within 15 minutes.', 'success');
       }
-    }, 500);
+    } catch (err) {
+      console.error('[ContactUsModal] Failed to submit callback request:', err);
+      addToast('Failed to submit inquiry. Please try again.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

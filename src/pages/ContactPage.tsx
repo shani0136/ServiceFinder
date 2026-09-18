@@ -5,6 +5,7 @@ import { GlowButton } from '../components/ui/GlowButton';
 import { useApp } from '../store/appState';
 import { SERVICE_NAMES } from '../constants/services';
 import { MUMBAI_LOCATIONS } from '../constants/locations';
+import { submitCallbackRequest } from '../lib/directoryService';
 import type { PublicView } from '../types';
 
 interface ContactPageProps {
@@ -70,7 +71,7 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
     }
   }, [user, state.selectedArea]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.phone.trim()) {
       addToast('Please provide your name and phone number.', 'warning');
@@ -78,15 +79,31 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
     }
 
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      await submitCallbackRequest({
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        email: formData.email.trim() || undefined,
+        area: formData.area,
+        service: formData.service,
+        role: isProvider ? 'provider' : 'customer',
+        inquiryTopic: isProvider ? formData.inquiryTopic : undefined,
+        message: formData.message.trim() || undefined,
+        userId: user?.uid,
+      });
+
       setSubmitted(true);
       if (isProvider) {
         addToast('Provider support request received! Our partner relations desk will call you within 15 minutes.', 'success');
       } else {
         addToast('Callback request received! Our Mumbai desk will call you within 15 minutes.', 'success');
       }
-    }, 500);
+    } catch (err) {
+      console.error('[ContactPage] Failed to submit callback request:', err);
+      addToast('Failed to submit request. Please try again or call our direct helpline.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

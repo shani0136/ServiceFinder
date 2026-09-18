@@ -8,20 +8,24 @@ import {
   deleteUserForAdmin,
   approveProviderProfileEdit,
   rejectProviderProfileEdit,
+  getAllCallbackRequestsForAdmin,
+  updateCallbackRequestStatus,
+  deleteCallbackRequestForAdmin,
 } from '../../lib/directoryService';
 import { MUMBAI_LOCATIONS } from '../../constants/locations';
-import type { Provider, ProviderStatus, AppUser } from '../../types';
+import type { Provider, ProviderStatus, AppUser, CallbackRequest, CallbackRequestStatus } from '../../types';
 import styles from './AdminView.module.css';
 
 export const AdminView: React.FC = () => {
   const { addToast } = useApp();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
+  const [callbacks, setCallbacks] = useState<CallbackRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewingProvider, setReviewingProvider] = useState<Provider | null>(null);
 
-  // Main Section Tab: 'providers' or 'users'
-  const [activeSection, setActiveSection] = useState<'providers' | 'users'>('providers');
+  // Main Section Tab: 'providers' | 'users' | 'callbacks'
+  const [activeSection, setActiveSection] = useState<'providers' | 'users' | 'callbacks'>('providers');
 
   // Provider Queue Filter
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'suspended' | 'edits'>('pending');
@@ -32,15 +36,22 @@ export const AdminView: React.FC = () => {
   const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'customer' | 'provider' | 'admin'>('all');
   const [userSearch, setUserSearch] = useState<string>('');
 
+  // Callbacks & Support Inquiries Filter
+  const [callbackFilter, setCallbackFilter] = useState<'all' | 'pending' | 'provider' | 'customer' | 'resolved'>('all');
+  const [callbackStation, setCallbackStation] = useState<string>('All');
+  const [callbackSearch, setCallbackSearch] = useState<string>('');
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [provList, userList] = await Promise.all([
+      const [provList, userList, callbackList] = await Promise.all([
         getAllProvidersForAdmin(),
         getAllUsersForAdmin(),
+        getAllCallbackRequestsForAdmin(),
       ]);
       setProviders(provList);
       setUsers(userList);
+      setCallbacks(callbackList);
     } catch (err) {
       console.error('[AdminView] Failed to load admin directory data:', err);
       addToast('Failed to load full admin data from server', 'error');
@@ -51,6 +62,12 @@ export const AdminView: React.FC = () => {
 
   useEffect(() => {
     loadData();
+
+    const handleCallbacksUpdated = () => {
+      getAllCallbackRequestsForAdmin().then(setCallbacks).catch(() => {});
+    };
+    window.addEventListener('sf_callbacks_updated', handleCallbacksUpdated);
+    return () => window.removeEventListener('sf_callbacks_updated', handleCallbacksUpdated);
   }, []);
 
   const handleRefresh = async () => {
@@ -64,6 +81,11 @@ export const AdminView: React.FC = () => {
   const suspendedCount = providers.filter((p) => p.status === 'suspended').length;
   const rejectedCount = providers.filter((p) => p.status === 'rejected').length;
   const editsPendingCount = providers.filter((p) => p.editPending && p.pendingUpdates).length;
+
+  const pendingCallbacksCount = callbacks.filter((c) => c.status === 'pending').length;
+  const providerCallbacksCount = callbacks.filter((c) => c.role === 'provider').length;
+  const customerCallbacksCount = callbacks.filter((c) => c.role === 'customer').length;
+  const resolvedCallbacksCount = callbacks.filter((c) => c.status === 'resolved').length;
 
   const customerCount = users.filter((u) => u.role === 'customer').length;
   const totalUsersCount = users.length > 0 ? users.length : providers.length + customerCount;
@@ -91,6 +113,13 @@ export const AdminView: React.FC = () => {
       badgeColor: editsPendingCount > 0 ? '#2563eb' : '#64748b',
     },
     {
+      label: 'Support & Callbacks',
+      value: pendingCallbacksCount,
+      icon: '📞',
+      badgeText: pendingCallbacksCount > 0 ? `${pendingCallbacksCount} pending calls` : 'All answered',
+      badgeColor: pendingCallbacksCount > 0 ? '#dc2626' : '#16a34a',
+    },
+    {
       label: 'Total Platform Accounts',
       value: totalUsersCount,
       icon: '📋',
@@ -98,6 +127,29 @@ export const AdminView: React.FC = () => {
       badgeColor: '#4f46e5',
     },
   ];
+
+  const handleUpdateCallbackStatus = async (id: string, status: CallbackRequestStatus) => {
+    try {
+      await updateCallbackRequestStatus(id, status);
+      setCallbacks((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, status, resolvedAt: status === 'resolved' ? new Date().toISOString() : c.resolvedAt } : c))
+      );
+      addToast(`Callback status updated to ${status.toUpperCase()} ✓`, 'success');
+    } catch {
+      addToast('Failed to update callback status', 'error');
+    }
+  };
+
+  const handleDeleteCallback = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete the callback inquiry from "${name}"?`)) return;
+    try {
+      await deleteCallbackRequestForAdmin(id);
+      setCallbacks((prev) => prev.filter((c) => c.id !== id));
+      addToast('Callback request deleted', 'info');
+    } catch {
+      addToast('Failed to delete callback request', 'error');
+    }
+  };
 
   const handleStatusChange = async (id: string, newStatus: ProviderStatus) => {
     try {
@@ -228,6 +280,30 @@ export const AdminView: React.FC = () => {
     return true;
   });
 
+  // Filtered callbacks & support inquiries
+  const filteredCallbacks = callbacks.filter((item) => {
+    if (callbackFilter === 'pending' && item.status !== 'pending') return false;
+    if (callbackFilter === 'provider' && item.role !== 'provider') return false;
+    if (callbackFilter === 'customer' && item.role !== 'customer') return false;
+    if (callbackFilter === 'resolved' && item.status !== 'resolved') return false;
+
+    if (callbackStation !== 'All' && item.area !== callbackStation) return false;
+
+    if (callbackSearch.trim()) {
+      const q = callbackSearch.toLowerCase().trim();
+      const matchName = item.name?.toLowerCase().includes(q);
+      const matchPhone = item.phone?.toLowerCase().includes(q);
+      const matchService = item.service?.toLowerCase().includes(q);
+      const matchArea = item.area?.toLowerCase().includes(q);
+      const matchTopic = item.inquiryTopic?.toLowerCase().includes(q) ?? false;
+      const matchMsg = item.message?.toLowerCase().includes(q) ?? false;
+      if (!matchName && !matchPhone && !matchService && !matchArea && !matchTopic && !matchMsg) {
+        return false;
+      }
+    }
+    return true;
+  });
+
   return (
     <div className={styles.view}>
       {/* Header */}
@@ -300,6 +376,14 @@ export const AdminView: React.FC = () => {
             📝 {editsPendingCount} Profile Edit Requests (Action Required)
           </span>
         )}
+        {pendingCallbacksCount > 0 && (
+          <span
+            onClick={() => { setActiveSection('callbacks'); setCallbackFilter('pending'); }}
+            style={{ fontSize: '12px', background: '#fee2e2', color: '#b91c1c', padding: '3px 10px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', border: '1px solid #fecaca' }}
+          >
+            📞 {pendingCallbacksCount} Pending Calls (Action Needed)
+          </span>
+        )}
         <span style={{ fontSize: '12px', background: '#dcfce7', color: '#166534', padding: '3px 10px', borderRadius: '8px', fontWeight: 700 }}>
           ✓ {approvedCount} Active Approved
         </span>
@@ -311,7 +395,7 @@ export const AdminView: React.FC = () => {
         </span>
       </div>
 
-      {/* Section Switcher (Providers vs Users) */}
+      {/* Section Switcher (Providers vs Users vs Callbacks) */}
       <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '5px', borderRadius: '12px', width: 'fit-content' }}>
         <button
           type="button"
@@ -358,6 +442,39 @@ export const AdminView: React.FC = () => {
           <span>👥 Registered Users & Customers</span>
           <span style={{ background: activeSection === 'users' ? '#4f46e5' : '#cbd5e1', color: '#ffffff', padding: '1px 7px', borderRadius: '999px', fontSize: '11px', fontWeight: 700 }}>
             {users.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSection('callbacks')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '9px',
+            border: 'none',
+            background: activeSection === 'callbacks' ? '#ffffff' : 'transparent',
+            color: activeSection === 'callbacks' ? '#0f172a' : '#64748b',
+            fontWeight: activeSection === 'callbacks' ? 800 : 600,
+            fontSize: '13px',
+            cursor: 'pointer',
+            boxShadow: activeSection === 'callbacks' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span>📞 Support & Callbacks</span>
+          <span
+            style={{
+              background: pendingCallbacksCount > 0 ? '#ef4444' : activeSection === 'callbacks' ? '#4f46e5' : '#cbd5e1',
+              color: '#ffffff',
+              padding: '1px 7px',
+              borderRadius: '999px',
+              fontSize: '11px',
+              fontWeight: 700,
+            }}
+          >
+            {pendingCallbacksCount > 0 ? `${pendingCallbacksCount} New` : callbacks.length}
           </span>
         </button>
       </div>
@@ -970,6 +1087,400 @@ export const AdminView: React.FC = () => {
                               Delete
                             </button>
                           )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── SECTION 3: CALLBACK & SUPPORT INQUIRIES DESK ─── */}
+      {activeSection === 'callbacks' && (
+        <div className={styles.tableCard}>
+          {/* Header Row with Filter Controls */}
+          <div className={styles.tableHeaderRow}>
+            <div>
+              <h2 className={styles.tableTitle}>Support & Callback Inquiries Desk 📞</h2>
+              <span style={{ fontSize: '12px', color: '#64748b' }}>
+                Review, manage, and call back service providers and customers requesting assistance along the Western Railway Line.
+              </span>
+            </div>
+          </div>
+
+          {/* Status Sub-Tabs */}
+          <div style={{ display: 'flex', gap: '8px', padding: '14px 24px 10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {[
+              { id: 'all', label: 'All Inquiries', count: callbacks.length, color: '#4f46e5' },
+              { id: 'pending', label: 'Pending Calls ⏳', count: pendingCallbacksCount, color: '#dc2626' },
+              { id: 'provider', label: 'Provider Support Calls ⚡', count: providerCallbacksCount, color: '#7c3aed' },
+              { id: 'customer', label: 'Customer Callbacks 👤', count: customerCallbacksCount, color: '#2563eb' },
+              { id: 'resolved', label: 'Resolved ✅', count: resolvedCallbacksCount, color: '#16a34a' },
+            ].map((tab) => {
+              const isActive = callbackFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setCallbackFilter(tab.id as any)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    border: isActive ? `2px solid ${tab.color}` : '1px solid #e2e8f0',
+                    background: isActive ? '#ffffff' : '#f8fafc',
+                    color: isActive ? tab.color : '#64748b',
+                    fontWeight: isActive ? 800 : 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    style={{
+                      background: isActive ? tab.color : '#cbd5e1',
+                      color: '#ffffff',
+                      borderRadius: '999px',
+                      padding: '1px 7px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search & Station Filter Bar */}
+          <div style={{ display: 'flex', gap: '12px', padding: '0 24px 16px', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '220px' }}>
+              <input
+                type="text"
+                placeholder="Search by name, phone, trade, station, topic, or message notes…"
+                value={callbackSearch}
+                onChange={(e) => setCallbackSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            <div style={{ width: '200px' }}>
+              <select
+                value={callbackStation}
+                onChange={(e) => setCallbackStation(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  background: '#ffffff',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="All">All Western Line Stations</option>
+                {MUMBAI_LOCATIONS.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Table Content */}
+          <div className={styles.tableWrapper}>
+            {filteredCallbacks.length === 0 ? (
+              <div className={styles.emptyState}>
+                <span style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>📞</span>
+                <p style={{ fontWeight: 600, margin: 0 }}>
+                  No callback or support inquiries match the current filter.
+                </p>
+              </div>
+            ) : (
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className={styles.th}>Contact / User</th>
+                    <th className={styles.th}>Phone & Direct Action</th>
+                    <th className={styles.th}>Station & Trade</th>
+                    <th className={styles.th}>Inquiry Topic / Message</th>
+                    <th className={styles.th}>Received</th>
+                    <th className={styles.th}>Status</th>
+                    <th className={styles.th} style={{ textAlign: 'right' }}>Admin Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCallbacks.map((item) => {
+                    const isProv = item.role === 'provider';
+                    const isPending = item.status === 'pending';
+                    const isInProgress = item.status === 'in_progress';
+                    const isResolved = item.status === 'resolved';
+
+                    const cleanPhone = item.phone.replace(/[^0-9]/g, '');
+                    const fullPhone = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
+                    const whatsappMsg = encodeURIComponent(
+                      `Hello ${item.name}, this is ServiceFinder Operations regarding your ${item.service} callback request for ${item.area}. How may we assist you?`
+                    );
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className={styles.tr}
+                        style={{
+                          background: isPending ? '#fffdf5' : undefined,
+                        }}
+                      >
+                        {/* Name & Role */}
+                        <td className={styles.td}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div>
+                              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '13.5px' }}>
+                                {item.name}
+                              </div>
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  marginTop: '3px',
+                                  background: isProv ? '#ede9fe' : '#e0f2fe',
+                                  color: isProv ? '#6d28d9' : '#0369a1',
+                                  padding: '2px 8px',
+                                  borderRadius: '999px',
+                                  fontSize: '10.5px',
+                                  fontWeight: 800,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.04em',
+                                }}
+                              >
+                                {isProv ? '⚡ PROVIDER' : '👤 CUSTOMER'}
+                              </span>
+                              {item.email && (
+                                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                  {item.email}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Phone & Direct Call/WhatsApp */}
+                        <td className={styles.td}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <a
+                              href={`tel:${item.phone}`}
+                              style={{
+                                fontSize: '13px',
+                                fontWeight: 800,
+                                color: '#2563eb',
+                                textDecoration: 'none',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <span>📞</span>
+                              <span>{item.phone}</span>
+                            </a>
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
+                              <a
+                                href={`tel:${item.phone}`}
+                                style={{
+                                  background: '#eff6ff',
+                                  border: '1px solid #bfdbfe',
+                                  color: '#1d4ed8',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  textDecoration: 'none',
+                                }}
+                                title="Call directly"
+                              >
+                                📞 Call
+                              </a>
+                              <a
+                                href={`https://wa.me/${fullPhone}?text=${whatsappMsg}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  background: '#f0fdf4',
+                                  border: '1px solid #bbf7d0',
+                                  color: '#15803d',
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  textDecoration: 'none',
+                                }}
+                                title="Chat on WhatsApp"
+                              >
+                                💬 WhatsApp
+                              </a>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Station & Trade */}
+                        <td className={styles.td}>
+                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
+                            📍 {item.area}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#475569', marginTop: '2px' }}>
+                            🔧 {item.service}
+                          </div>
+                        </td>
+
+                        {/* Topic / Message */}
+                        <td className={styles.td} style={{ maxWidth: '280px' }}>
+                          {item.inquiryTopic && (
+                            <div
+                              style={{
+                                display: 'inline-block',
+                                background: '#f1f5f9',
+                                color: '#334155',
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                fontSize: '11.5px',
+                                fontWeight: 700,
+                                marginBottom: '4px',
+                              }}
+                            >
+                              📌 {item.inquiryTopic}
+                            </div>
+                          )}
+                          {item.message ? (
+                            <div style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.4 }}>
+                              "{item.message}"
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: '11.5px', color: '#94a3b8', fontStyle: 'italic' }}>
+                              No additional notes provided.
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Received At */}
+                        <td className={styles.td}>
+                          <span style={{ fontSize: '12px', color: '#64748b' }}>
+                            {item.createdAt ? new Date(item.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </span>
+                        </td>
+
+                        {/* Status */}
+                        <td className={styles.td}>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '3px 9px',
+                              borderRadius: '999px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              textTransform: 'uppercase',
+                              background: isPending ? '#fef3c7' : isInProgress ? '#dbeafe' : isResolved ? '#dcfce7' : '#f1f5f9',
+                              color: isPending ? '#92400e' : isInProgress ? '#1e40af' : isResolved ? '#166534' : '#475569',
+                            }}
+                          >
+                            <span>{isPending ? '⏳' : isInProgress ? '🔄' : isResolved ? '✓' : '✕'}</span>
+                            <span>{item.status.replace('_', ' ')}</span>
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td className={styles.td} style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            {isPending && (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateCallbackStatus(item.id, 'in_progress')}
+                                style={{
+                                  background: '#eff6ff',
+                                  border: '1px solid #bfdbfe',
+                                  color: '#1d4ed8',
+                                  borderRadius: '6px',
+                                  padding: '4px 8px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                                title="Mark as being handled"
+                              >
+                                🔄 In Progress
+                              </button>
+                            )}
+
+                            {!isResolved ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateCallbackStatus(item.id, 'resolved')}
+                                style={{
+                                  background: '#dcfce7',
+                                  border: '1px solid #86efac',
+                                  color: '#166534',
+                                  borderRadius: '6px',
+                                  padding: '4px 8px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                                title="Mark as resolved / completed"
+                              >
+                                ✓ Resolved
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateCallbackStatus(item.id, 'pending')}
+                                style={{
+                                  background: '#f8fafc',
+                                  border: '1px solid #cbd5e1',
+                                  color: '#475569',
+                                  borderRadius: '6px',
+                                  padding: '4px 8px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                                title="Re-open request"
+                              >
+                                ⏳ Re-open
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCallback(item.id, item.name)}
+                              style={{
+                                background: '#fee2e2',
+                                border: '1px solid #fca5a5',
+                                color: '#991b1b',
+                                borderRadius: '6px',
+                                padding: '4px 8px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                              title="Delete request"
+                            >
+                              🗑️
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

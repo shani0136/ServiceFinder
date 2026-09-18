@@ -173,5 +173,17 @@ service cloud.firestore {
       // Reviews cannot be altered by users; only admins can moderate or delete
       allow update, delete: if isAdmin();
     }
+
+    // ─── 8. Callback & Support Requests Collection: callback_requests/{requestId} ────
+    match /callback_requests/{requestId} {
+      // Anyone (customers, providers, or visitors) can submit a callback / support inquiry
+      allow create: if true;
+
+      // Admins can read all callback requests; creators can read their own
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+
+      // Only admins can update status (pending, in_progress, resolved) or delete
+      allow update, delete: if isAdmin();
+    }
   }
 }

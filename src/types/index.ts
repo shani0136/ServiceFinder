@@ -183,3 +183,25 @@ export interface OnboardingForm {
   skills: string;
   description: string;
 }
+
+// ─── Callback & Support Requests ───────────────────────────────────────────
+
+export type CallbackRequestStatus = 'pending' | 'in_progress' | 'resolved' | 'cancelled';
+
+export interface CallbackRequest {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  area: string;
+  service: string;
+  role: 'provider' | 'customer';
+  inquiryTopic?: string;
+  message?: string;
+  status: CallbackRequestStatus;
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  notes?: string;
+  userId?: string;
+}

@@ -15,7 +15,15 @@ import {
   increment,
 } from 'firebase/firestore';
 import { db, DEMO_MODE } from './firebase';
-import type { Provider, ProviderStatus, Review, AppUser, ProviderPendingUpdates } from '../types';
+import type {
+  Provider,
+  ProviderStatus,
+  Review,
+  AppUser,
+  ProviderPendingUpdates,
+  CallbackRequest,
+  CallbackRequestStatus,
+} from '../types';
 import { SERVICE_NAMES, type ServiceCategory } from '../constants/services';
 import { MUMBAI_LOCATIONS, type MumbaiLocation } from '../constants/locations';
 
@@ -1161,4 +1169,175 @@ export async function submitProviderReview(
   saveLocalProviders(existingProviders);
 
   return newReview;
+}
+
+// ─── Callback & Support Requests Management ──────────────────────────────────
+const STORAGE_CALLBACKS_KEY = 'sf_callback_requests';
+
+function getLocalCallbackRequests(): CallbackRequest[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_CALLBACKS_KEY);
+    if (raw) return JSON.parse(raw);
+    const initial: CallbackRequest[] = [
+      {
+        id: 'req_seed_01',
+        name: 'shani',
+        phone: '809479643',
+        area: 'Borivali',
+        service: 'Electrician',
+        role: 'provider',
+        inquiryTopic: 'Profile Verification & Application Status',
+        message: 'Please verify my Electrician provider listing in Borivali station.',
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    localStorage.setItem(STORAGE_CALLBACKS_KEY, JSON.stringify(initial));
+    return initial;
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalCallbackRequests(requests: CallbackRequest[]) {
+  try {
+    localStorage.setItem(STORAGE_CALLBACKS_KEY, JSON.stringify(requests));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('sf_callbacks_updated'));
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export async function submitCallbackRequest(payload: {
+  name: string;
+  phone: string;
+  email?: string;
+  area: string;
+  service: string;
+  role: 'provider' | 'customer';
+  inquiryTopic?: string;
+  message?: string;
+  userId?: string;
+}): Promise<string> {
+  const newId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const item: CallbackRequest = {
+    id: newId,
+    name: payload.name.trim(),
+    phone: payload.phone.trim(),
+    email: payload.email?.trim() || undefined,
+    area: payload.area,
+    service: payload.service,
+    role: payload.role,
+    inquiryTopic: payload.inquiryTopic,
+    message: payload.message?.trim() || undefined,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    userId: payload.userId,
+  };
+
+  if (!DEMO_MODE && db) {
+    try {
+      const docRef = doc(collection(db, 'callback_requests'), newId);
+      await setDoc(docRef, {
+        ...item,
+        serverCreatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('[directoryService] Firestore callback submit failed, storing locally:', err);
+    }
+  }
+
+  const list = [item, ...getLocalCallbackRequests().filter((r) => r.id !== newId)];
+  saveLocalCallbackRequests(list);
+  return newId;
+}
+
+export async function getAllCallbackRequestsForAdmin(): Promise<CallbackRequest[]> {
+  const localList = getLocalCallbackRequests();
+  if (DEMO_MODE || !db) {
+    return localList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  try {
+    const q = query(collection(db, 'callback_requests'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    const firestoreList: CallbackRequest[] = [];
+    snapshot.forEach((d) => {
+      const data = d.data() as CallbackRequest;
+      firestoreList.push({
+        ...data,
+        id: d.id,
+      });
+    });
+
+    const map = new Map<string, CallbackRequest>();
+    firestoreList.forEach((r) => map.set(r.id, r));
+    localList.forEach((r) => {
+      if (!map.has(r.id)) map.set(r.id, r);
+    });
+
+    const merged = Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    saveLocalCallbackRequests(merged);
+    return merged;
+  } catch (err) {
+    console.warn('[directoryService] Failed to load callback requests from Firestore, using local cache:', err);
+    return localList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+}
+
+export async function updateCallbackRequestStatus(
+  id: string,
+  status: CallbackRequestStatus,
+  notes?: string,
+  adminUid?: string
+): Promise<void> {
+  const now = new Date().toISOString();
+  if (!DEMO_MODE && db) {
+    try {
+      const docRef = doc(db, 'callback_requests', id);
+      const updates: any = {
+        status,
+        updatedAt: now,
+      };
+      if (status === 'resolved') {
+        updates.resolvedAt = now;
+        if (adminUid) updates.resolvedBy = adminUid;
+      }
+      if (notes !== undefined) {
+        updates.notes = notes;
+      }
+      await updateDoc(docRef, updates);
+    } catch (err) {
+      console.warn('[directoryService] Failed to update callback request in Firestore:', err);
+    }
+  }
+
+  const list = getLocalCallbackRequests().map((r) =>
+    r.id === id
+      ? {
+          ...r,
+          status,
+          ...(status === 'resolved' ? { resolvedAt: now, resolvedBy: adminUid } : {}),
+          ...(notes !== undefined ? { notes } : {}),
+        }
+      : r
+  );
+  saveLocalCallbackRequests(list);
+}
+
+export async function deleteCallbackRequestForAdmin(id: string): Promise<void> {
+  if (!DEMO_MODE && db) {
+    try {
+      await deleteDoc(doc(db, 'callback_requests', id));
+    } catch (err) {
+      console.warn('[directoryService] Failed to delete callback request from Firestore:', err);
+    }
+  }
+
+  const list = getLocalCallbackRequests().filter((r) => r.id !== id);
+  saveLocalCallbackRequests(list);
 }
