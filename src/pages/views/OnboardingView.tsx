@@ -3,7 +3,7 @@ import { useApp } from '../../store/appState';
 import { SERVICE_NAMES, type ServiceCategory } from '../../constants/services';
 import { MUMBAI_LOCATIONS } from '../../constants/locations';
 import { GlowButton } from '../../components/ui/GlowButton';
-import { registerProvider } from '../../lib/directoryService';
+import { registerProvider, updateProviderStatus } from '../../lib/directoryService';
 import styles from './OnboardingView.module.css';
 
 interface OnboardingViewProps {
@@ -11,9 +11,12 @@ interface OnboardingViewProps {
 }
 
 export const OnboardingView: React.FC<OnboardingViewProps> = ({ onRegistered }) => {
-  const { addToast } = useApp();
+  const { state, setView, addToast } = useApp();
+  const isAdmin = state.user?.role === 'admin';
+
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [autoApprove, setAutoApprove] = useState(true);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -48,7 +51,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onRegistered }) 
         ? formData.skills.split(',').map((s) => s.trim()).filter(Boolean)
         : [formData.service];
 
-      await registerProvider({
+      const newProv = await registerProvider({
         name: formData.name.trim(),
         businessName: formData.businessName.trim() || undefined,
         service: formData.service,
@@ -62,8 +65,19 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onRegistered }) 
         skills: skillsArray,
       });
 
+      if (isAdmin && autoApprove) {
+        await updateProviderStatus(newProv.id, 'approved', true);
+        addToast(`Provider "${formData.name}" onboarded and published to live directory! ✓`, 'success');
+      } else {
+        addToast(
+          isAdmin
+            ? `Provider "${formData.name}" added to Admin verification queue.`
+            : 'Application submitted! Status: Pending Administrator Review',
+          'success'
+        );
+      }
+
       setSubmitted(true);
-      addToast('Application submitted! Status: Pending Administrator Review', 'success');
       if (onRegistered) onRegistered();
     } catch {
       addToast('Failed to submit registration. Please check your connection.', 'error');
@@ -77,13 +91,17 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onRegistered }) 
       <div className={styles.view}>
         <div className={styles.statusCard}>
           <div style={{ fontSize: '3rem' }}>📋</div>
-          <span className={styles.badgePending}>⏳ Application Status: Pending Admin Review</span>
+          <span className={styles.badgePending}>
+            {isAdmin && autoApprove ? '✓ Status: Live & Approved in Directory' : '⏳ Application Status: Pending Admin Review'}
+          </span>
           <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, margin: '8px 0' }}>
-            Application Submitted, {formData.name}!
+            {isAdmin ? `Provider "${formData.name}" Successfully Registered!` : `Application Submitted, ${formData.name}!`}
           </h2>
           <p style={{ color: 'var(--muted)', fontSize: 'var(--text-sm)', maxWidth: '520px', lineHeight: 1.6 }}>
-            Your provider profile for <strong>{formData.service}</strong> in <strong>{formData.serviceArea}, Mumbai</strong> has been registered.
-            To maintain directory trust, an administrator reviews credentials before public listing.
+            The provider profile for <strong>{formData.service}</strong> in <strong>{formData.serviceArea}, Mumbai</strong> has been created.
+            {isAdmin && autoApprove
+              ? ' This provider is now live and will appear in public customer queries.'
+              : ' An administrator can review and verify credentials before public directory listing.'}
           </p>
 
           <div className={styles.infoGrid}>
@@ -93,29 +111,65 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onRegistered }) 
             </div>
             <div className={styles.infoBox}>
               <span className={styles.infoVal}>₹0</span>
-              <span className={styles.infoLabel}>Zero Platform Commission</span>
+              <span className={styles.infoLabel}>Zero Commission</span>
             </div>
             <div className={styles.infoBox}>
-              <span className={styles.infoVal}>Manual</span>
-              <span className={styles.infoLabel}>Quality Review Process</span>
+              <span className={styles.infoVal}>{isAdmin && autoApprove ? 'Approved' : 'Pending'}</span>
+              <span className={styles.infoLabel}>Verification Status</span>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setSubmitted(false)}
-            style={{
-              marginTop: 'var(--space-4)',
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--accent)',
-              cursor: 'pointer',
-              fontSize: 'var(--text-sm)',
-              fontWeight: 600,
-            }}
-          >
-            ← Submit another registration
-          </button>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: 'var(--space-6)', flexWrap: 'wrap' }}>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setView('admin')}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: '#4f46e5',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)',
+                }}
+              >
+                Go to Admin Control Center →
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setSubmitted(false);
+                setFormData({
+                  name: '',
+                  businessName: '',
+                  email: '',
+                  service: 'Electrician',
+                  phone: '',
+                  whatsapp: '',
+                  serviceArea: 'Borivali',
+                  experienceYears: '3',
+                  skills: '',
+                  description: '',
+                });
+              }}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #cbd5e1',
+                padding: '9px 18px',
+                borderRadius: '10px',
+                color: '#334155',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 700,
+              }}
+            >
+              + Register Another Provider
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -123,10 +177,59 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onRegistered }) 
 
   return (
     <div className={styles.view}>
+      {isAdmin && (
+        <div
+          style={{
+            background: '#f5f3ff',
+            border: '1.5px solid #ddd6fe',
+            borderRadius: '14px',
+            padding: '14px 18px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '22px' }}>🛠️</span>
+            <div>
+              <strong style={{ fontSize: '13.5px', color: '#5b21b6' }}>
+                Administrator Provider Onboarding Mode
+              </strong>
+              <p style={{ fontSize: '12px', color: '#6d28d9', margin: 0 }}>
+                Manually register a verified technician into the Mumbai Western Line directory.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setView('admin')}
+            style={{
+              background: '#ffffff',
+              border: '1.5px solid #c4b5fd',
+              color: '#6d28d9',
+              padding: '6px 14px',
+              borderRadius: '8px',
+              fontSize: '12.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            ← Back to Admin Panel
+          </button>
+        </div>
+      )}
+
       <div className={styles.header}>
-        <h1 className={styles.title}>Service Provider Registration</h1>
+        <h1 className={styles.title}>
+          {isAdmin ? 'Admin Tradesman Onboarding' : 'Service Provider Registration'}
+        </h1>
         <p className={styles.subtitle}>
-          Register your local trade on ServiceFinder. Connect directly with residents in your Mumbai area with zero middleman commissions.
+          {isAdmin
+            ? 'Add and onboard verified local tradesmen directly into the ServiceFinder network across Mumbai Western Line.'
+            : 'Register your local trade on ServiceFinder. Connect directly with residents in your Mumbai area with zero middleman commissions.'}
         </p>
       </div>
 
@@ -159,40 +262,41 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onRegistered }) 
             </div>
 
             <div className={styles.formField}>
-              <label className={styles.label}>Main Service Category *</label>
+              <label className={styles.label}>Email Address (Optional)</label>
+              <input
+                type="email"
+                name="email"
+                className={styles.input}
+                placeholder="rajesh@example.com"
+                value={formData.email}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div className={styles.formField}>
+              <label className={styles.label}>Service Trade / Category *</label>
               <select
                 name="service"
                 className={styles.select}
                 value={formData.service}
                 onChange={handleChange}
+                required
               >
-                {SERVICE_NAMES.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
+                {SERVICE_NAMES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div className={styles.formField}>
-              <label className={styles.label}>Primary Mumbai Service Area *</label>
-              <select
-                name="serviceArea"
-                className={styles.select}
-                value={formData.serviceArea}
-                onChange={handleChange}
-              >
-                {MUMBAI_LOCATIONS.map((loc) => (
-                  <option key={loc} value={loc}>{loc}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className={styles.formField}>
-              <label className={styles.label}>Phone Number (For Direct Calls) *</label>
+              <label className={styles.label}>Phone Number (Calls) *</label>
               <input
                 type="tel"
                 name="phone"
                 className={styles.input}
-                placeholder="e.g. 9820012345"
+                placeholder="e.g. 98200 12345"
                 value={formData.phone}
                 onChange={handleChange}
                 required
@@ -209,6 +313,23 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onRegistered }) 
                 value={formData.whatsapp}
                 onChange={handleChange}
               />
+            </div>
+
+            <div className={styles.formField}>
+              <label className={styles.label}>Primary Western Line Station *</label>
+              <select
+                name="serviceArea"
+                className={styles.select}
+                value={formData.serviceArea}
+                onChange={handleChange}
+                required
+              >
+                {MUMBAI_LOCATIONS.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className={styles.formField}>
@@ -237,11 +358,11 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onRegistered }) 
             </div>
 
             <div className={[styles.formField, styles.fullWidth].join(' ')}>
-              <label className={styles.label}>About Your Work & Experience</label>
+              <label className={styles.label}>About Work & Experience</label>
               <textarea
                 name="description"
                 className={styles.textarea}
-                placeholder="Describe your services, working hours, or specializations..."
+                placeholder="Describe services, working hours, or specializations..."
                 value={formData.description}
                 onChange={handleChange}
                 rows={3}
@@ -249,13 +370,43 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onRegistered }) 
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-4)' }}>
+          {isAdmin && (
+            <div
+              style={{
+                marginTop: '16px',
+                padding: '12px 16px',
+                background: '#f0fdf4',
+                border: '1.5px solid #bbf7d0',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}
+            >
+              <input
+                type="checkbox"
+                id="autoApproveCheck"
+                checked={autoApprove}
+                onChange={(e) => setAutoApprove(e.target.checked)}
+                style={{ width: '18px', height: '18px', accentColor: '#16a34a', cursor: 'pointer' }}
+              />
+              <label htmlFor="autoApproveCheck" style={{ fontSize: '13px', fontWeight: 700, color: '#166534', cursor: 'pointer' }}>
+                ✓ Instantly approve and publish this provider to live directory (Skip pending review)
+              </label>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-5)' }}>
             <GlowButton
               type="submit"
               loading={submitting}
               size="lg"
             >
-              {submitting ? 'Submitting Application…' : 'Submit for Admin Review →'}
+              {submitting
+                ? 'Processing…'
+                : isAdmin
+                ? (autoApprove ? 'Publish Provider to Live Directory ✓' : 'Register Provider to Queue →')
+                : 'Submit for Admin Review →'}
             </GlowButton>
           </div>
         </form>

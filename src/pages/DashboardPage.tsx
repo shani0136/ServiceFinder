@@ -24,43 +24,40 @@ export const DashboardPage: React.FC = () => {
   };
 
   const renderView = () => {
-    if (user.role === 'admin') {
-      if (state.currentView === 'profile') return <ProfileView />;
-      if (state.currentView === 'settings') return <SettingsView />;
-      if (state.currentView === 'directory') return <DirectoryView />;
-      return <AdminView />;
-    }
-
     switch (state.currentView) {
+      case 'admin':
+        return <AdminView />;
       case 'finder':
         return <FinderView />;
       case 'directory':
         return <DirectoryView />;
       case 'onboarding':
-        return <OnboardingView />;
-      case 'admin':
-        return <FinderView />;
+        return <OnboardingView onRegistered={() => setView('admin')} />;
       case 'profile':
         return <ProfileView />;
       case 'settings':
         return <SettingsView />;
       default:
-        return <FinderView />;
+        return user.role === 'admin' ? <AdminView /> : <FinderView />;
     }
   };
 
   const getViewTitle = () => {
-    if (user.role === 'admin' && state.currentView !== 'profile' && state.currentView !== 'settings') {
-      return 'Admin Dashboard';
-    }
     switch (state.currentView) {
-      case 'finder': return 'AI Smart Finder';
-      case 'directory': return 'Service Directory';
-      case 'onboarding': return 'Register Provider';
-      case 'admin': return 'Admin Dashboard';
-      case 'profile': return 'User Profile';
-      case 'settings': return 'App Settings';
-      default: return 'Dashboard';
+      case 'admin':
+        return 'Admin Dashboard';
+      case 'finder':
+        return 'AI Smart Finder';
+      case 'directory':
+        return 'Service Directory';
+      case 'onboarding':
+        return user.role === 'admin' ? 'Onboard Service Provider' : 'Register Provider';
+      case 'profile':
+        return user.role === 'admin' ? 'Admin Profile' : 'User Profile';
+      case 'settings':
+        return 'App Settings';
+      default:
+        return user.role === 'admin' ? 'Admin Dashboard' : 'Dashboard';
     }
   };
 
