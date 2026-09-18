@@ -5,6 +5,7 @@ import {
   registerProvider,
   getProviderByUid,
   updateProviderProfile,
+  submitProviderProfileEdit,
   setProviderAvailability,
 } from '../lib/directoryService';
 import { SERVICE_NAMES, TRADE_SKILL_SUGGESTIONS, type ServiceCategory } from '../constants/services';
@@ -356,28 +357,66 @@ export const ProviderPortalPage: React.FC<ProviderPortalPageProps> = ({
     setProfileSaving(true);
     try {
       if (providerProfile && mode === 'edit_profile') {
-        // Updating existing profile
-        const updates: Partial<Provider> = {
-          name: fullName.trim(),
-          service: primaryService,
-          primaryService,
-          phone: phone.trim(),
-          phoneVerified: true,
-          workProof: workProof.trim(),
-          submittedProof: workProof.trim(),
-          whatsapp: finalWhatsapp,
-          whatsappPhone: finalWhatsapp,
-          profileImage: profilePhoto.trim() || undefined,
-          serviceArea: primaryArea,
-          serviceAreas: selectedAreas,
-          experienceYears: Math.max(0, Number(experienceYears) || 1),
-          description: description.trim() || defaultDesc,
-          skills: skillsList,
-        };
-        await updateProviderProfile(providerProfile.id, updates);
-        setProviderProfile((prev) => (prev ? { ...prev, ...updates } : null));
-        addToast('Profile updated successfully!', 'success');
-        setMode('dashboard');
+        if (providerProfile.status === 'approved') {
+          // Approved provider editing profile: stage changes for Admin confirmation!
+          const pendingData = {
+            name: fullName.trim(),
+            service: primaryService,
+            primaryService,
+            phone: phone.trim(),
+            workProof: workProof.trim(),
+            submittedProof: workProof.trim(),
+            whatsapp: finalWhatsapp,
+            whatsappPhone: finalWhatsapp,
+            profileImage: profilePhoto.trim() || undefined,
+            serviceArea: primaryArea,
+            serviceAreas: selectedAreas,
+            experienceYears: Math.max(0, Number(experienceYears) || 1),
+            description: description.trim() || defaultDesc,
+            skills: skillsList,
+          };
+          await submitProviderProfileEdit(providerProfile.id, pendingData);
+          setProviderProfile((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  editPending: true,
+                  pendingUpdates: {
+                    ...pendingData,
+                    requestedAt: new Date().toISOString(),
+                  },
+                }
+              : null
+          );
+          addToast(
+            'Profile updates submitted to Admin for approval! Your live listing remains active until verified.',
+            'success'
+          );
+          setMode('dashboard');
+        } else {
+          // Updating pending or draft application
+          const updates: Partial<Provider> = {
+            name: fullName.trim(),
+            service: primaryService,
+            primaryService,
+            phone: phone.trim(),
+            phoneVerified: true,
+            workProof: workProof.trim(),
+            submittedProof: workProof.trim(),
+            whatsapp: finalWhatsapp,
+            whatsappPhone: finalWhatsapp,
+            profileImage: profilePhoto.trim() || undefined,
+            serviceArea: primaryArea,
+            serviceAreas: selectedAreas,
+            experienceYears: Math.max(0, Number(experienceYears) || 1),
+            description: description.trim() || defaultDesc,
+            skills: skillsList,
+          };
+          await updateProviderProfile(providerProfile.id, updates);
+          setProviderProfile((prev) => (prev ? { ...prev, ...updates } : null));
+          addToast('Application details updated successfully!', 'success');
+          setMode('dashboard');
+        }
       } else {
         // Creating new profile (strictly status: pending)
         const newProvider = await registerProvider({
@@ -1610,6 +1649,44 @@ export const ProviderPortalPage: React.FC<ProviderPortalPageProps> = ({
                 </div>
               )}
 
+              {/* Edit Pending Confirmation Banner */}
+              {providerProfile.editPending && providerProfile.pendingUpdates && (
+                <div
+                  style={{
+                    border: '2px solid #3b82f6',
+                    background: '#eff6ff',
+                    padding: '18px 20px',
+                    borderRadius: '16px',
+                    marginTop: '14px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '14px',
+                  }}
+                >
+                  <div style={{ fontSize: '1.8rem', lineHeight: 1 }}>📝</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
+                      <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#1e40af' }}>
+                        Profile Update Submitted to Admin for Verification
+                      </h4>
+                      <span style={{ fontSize: '11px', fontWeight: 800, background: '#dbeafe', color: '#1d4ed8', padding: '3px 10px', borderRadius: '999px', border: '1px solid #bfdbfe' }}>
+                        EDIT PENDING APPROVAL
+                      </span>
+                    </div>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>
+                      You requested updates to your profile (Requested Profession: <strong>{providerProfile.pendingUpdates.service}</strong>
+                      {providerProfile.pendingUpdates.skills && providerProfile.pendingUpdates.skills.length > 0 && (
+                        <span> · Skills: {providerProfile.pendingUpdates.skills.join(', ')}</span>
+                      )}
+                      ). An authorized administrator is reviewing these changes.
+                    </p>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                      ℹ️ Your live public directory listing continues displaying your current approved profession (<strong>{providerProfile.service}</strong>) until confirmed by Admin.
+                    </p>
+                  </div>
+                </div>
+              )}
+
             {providerProfile.status === 'rejected' && (
               <div className={styles.statusBannerRejected}>
                 <div className={styles.statusIcon}>✗</div>
@@ -1793,14 +1870,39 @@ export const ProviderPortalPage: React.FC<ProviderPortalPageProps> = ({
                     padding: '20px',
                   }}>
                     <h3 style={{ fontSize: 'var(--text-sm)', fontWeight: 800, color: '#1e293b', marginBottom: '8px' }}>
-                      📋 Provider Directives
+                      📋 Provider Directives & Legal
                     </h3>
-                    <ul style={{ paddingLeft: '18px', fontSize: '12px', color: '#64748b', lineHeight: 1.6 }}>
+                    <ul style={{ paddingLeft: '18px', fontSize: '12px', color: '#64748b', lineHeight: 1.6, margin: 0 }}>
                       <li>Ensure your phone number is always reachable during working hours.</li>
                       <li>Customers contact you directly on WhatsApp with pre-filled details.</li>
                       <li>ServiceFinder never takes commission on your work.</li>
                       <li>Always quote honest, fair estimates to local residents.</li>
                     </ul>
+                    <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('contact')}
+                        style={{ background: 'none', border: 'none', color: '#4f46e5', fontWeight: 700, fontSize: '12px', cursor: 'pointer', padding: 0 }}
+                      >
+                        📞 Contact Support
+                      </button>
+                      <span style={{ color: '#cbd5e1' }}>•</span>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('terms')}
+                        style={{ background: 'none', border: 'none', color: '#4f46e5', fontWeight: 700, fontSize: '12px', cursor: 'pointer', padding: 0 }}
+                      >
+                        📜 Terms & Conditions
+                      </button>
+                      <span style={{ color: '#cbd5e1' }}>•</span>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('privacy')}
+                        style={{ background: 'none', border: 'none', color: '#4f46e5', fontWeight: 700, fontSize: '12px', cursor: 'pointer', padding: 0 }}
+                      >
+                        🔒 Privacy Policy
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

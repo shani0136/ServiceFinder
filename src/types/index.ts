@@ -44,7 +44,32 @@ export interface Provider {
   whatsappClicks?: number;
   pricingInfo?: string;
   workingHours?: string;
+  editPending?: boolean;
+  pendingUpdates?: ProviderPendingUpdates;
+  editRejectedAt?: string;
+  editRejectionReason?: string;
+  lastEditedApprovedAt?: string;
+  lastEditedApprovedBy?: string;
 }
+
+export interface ProviderPendingUpdates {
+  name?: string;
+  service?: ServiceCategory;
+  primaryService?: ServiceCategory;
+  skills?: string[];
+  serviceArea?: string;
+  serviceAreas?: string[];
+  experienceYears?: number;
+  description?: string;
+  workProof?: string;
+  submittedProof?: string;
+  phone?: string;
+  whatsapp?: string;
+  whatsappPhone?: string;
+  profileImage?: string;
+  requestedAt: string;
+}
+
 
 // ─── Review ─────────────────────────────────────────────────────────────────
 

@@ -360,6 +360,44 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <span>⏳</span>
                         <span>Application Status</span>
                       </button>
+
+                      <div className={styles.dropdownDivider} />
+
+                      <button
+                        type="button"
+                        className={styles.dropdownItem}
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          onNavigate('contact');
+                        }}
+                      >
+                        <span>📞</span>
+                        <span>Contact Support</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.dropdownItem}
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          onNavigate('terms');
+                        }}
+                      >
+                        <span>📜</span>
+                        <span>Terms & Conditions</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.dropdownItem}
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          onNavigate('privacy');
+                        }}
+                      >
+                        <span>🔒</span>
+                        <span>Privacy Policy</span>
+                      </button>
                     </>
                   ) : (
                     // Customer & Admin Menu Options
@@ -521,6 +559,39 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }}
                 >
                   📋 Application Status
+                </button>
+
+                <div style={{ height: '1px', background: '#e2e8f0', margin: '6px 0' }} />
+
+                <button
+                  type="button"
+                  className={styles.mobileNavLink}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onNavigate('contact');
+                  }}
+                >
+                  📞 Contact Support
+                </button>
+                <button
+                  type="button"
+                  className={styles.mobileNavLink}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onNavigate('terms');
+                  }}
+                >
+                  📜 Terms & Conditions
+                </button>
+                <button
+                  type="button"
+                  className={styles.mobileNavLink}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onNavigate('privacy');
+                  }}
+                >
+                  🔒 Privacy Policy
                 </button>
               </>
             ) : (

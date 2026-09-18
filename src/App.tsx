@@ -342,8 +342,18 @@ function MainRouter() {
     }
 
     // Service Provider Experience: Strictly gated to Provider Portal
-    // Provider CANNOT see customer directory, search, or other provider profiles
+    // Provider CANNOT see customer directory, search, or other provider profiles,
+    // but CAN freely view legal terms, privacy policy, and contact support pages!
     if (state.user?.role === 'provider') {
+      if (state.publicView === 'terms') {
+        return <TermsPage onNavigate={handleNavigate} onSignIn={() => {}} />;
+      }
+      if (state.publicView === 'privacy') {
+        return <PrivacyPolicyPage onNavigate={handleNavigate} onSignIn={() => {}} />;
+      }
+      if (state.publicView === 'contact') {
+        return <ContactPage onNavigate={handleNavigate} onSignIn={() => {}} />;
+      }
       return (
         <ProviderPortalPage
           onNavigate={handleNavigate}

@@ -6,6 +6,8 @@ import {
   deleteProviderForAdmin,
   getAllUsersForAdmin,
   deleteUserForAdmin,
+  approveProviderProfileEdit,
+  rejectProviderProfileEdit,
 } from '../../lib/directoryService';
 import { MUMBAI_LOCATIONS } from '../../constants/locations';
 import type { Provider, ProviderStatus, AppUser } from '../../types';
@@ -22,7 +24,7 @@ export const AdminView: React.FC = () => {
   const [activeSection, setActiveSection] = useState<'providers' | 'users'>('providers');
 
   // Provider Queue Filter
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'suspended'>('pending');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'suspended' | 'edits'>('pending');
   const [selectedStation, setSelectedStation] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -61,6 +63,7 @@ export const AdminView: React.FC = () => {
   const pendingCount = providers.filter((p) => p.status === 'pending').length;
   const suspendedCount = providers.filter((p) => p.status === 'suspended').length;
   const rejectedCount = providers.filter((p) => p.status === 'rejected').length;
+  const editsPendingCount = providers.filter((p) => p.editPending && p.pendingUpdates).length;
 
   const customerCount = users.filter((u) => u.role === 'customer').length;
   const totalUsersCount = users.length > 0 ? users.length : providers.length + customerCount;
@@ -81,11 +84,11 @@ export const AdminView: React.FC = () => {
       badgeColor: pendingCount > 0 ? '#d97706' : '#64748b',
     },
     {
-      label: 'Registered Customers',
-      value: customerCount,
-      icon: '👥',
-      badgeText: 'Verified members',
-      badgeColor: '#2563eb',
+      label: 'Profile Edit Requests',
+      value: editsPendingCount,
+      icon: '📝',
+      badgeText: editsPendingCount > 0 ? 'Action required' : 'No pending edits',
+      badgeColor: editsPendingCount > 0 ? '#2563eb' : '#64748b',
     },
     {
       label: 'Total Platform Accounts',
@@ -114,6 +117,36 @@ export const AdminView: React.FC = () => {
       );
     } catch {
       addToast('Failed to update provider status.', 'error');
+    }
+  };
+
+  const handleApproveEdit = async (id: string, name: string) => {
+    try {
+      await approveProviderProfileEdit(id);
+      await loadData();
+      if (reviewingProvider?.id === id || reviewingProvider?.uid === id) {
+        const provs = await getAllProvidersForAdmin();
+        const found = provs.find((p) => p.id === id || p.uid === id);
+        setReviewingProvider(found || null);
+      }
+      addToast(`Profile edit for "${name}" approved and published to live directory! ✓`, 'success');
+    } catch {
+      addToast('Failed to approve profile edit.', 'error');
+    }
+  };
+
+  const handleRejectEdit = async (id: string, name: string) => {
+    try {
+      await rejectProviderProfileEdit(id);
+      await loadData();
+      if (reviewingProvider?.id === id || reviewingProvider?.uid === id) {
+        const provs = await getAllProvidersForAdmin();
+        const found = provs.find((p) => p.id === id || p.uid === id);
+        setReviewingProvider(found || null);
+      }
+      addToast(`Profile edit for "${name}" was rejected.`, 'info');
+    } catch {
+      addToast('Failed to reject profile edit.', 'error');
     }
   };
 
@@ -153,7 +186,9 @@ export const AdminView: React.FC = () => {
 
   // Filtered providers
   const filteredProviders = providers.filter((p) => {
-    if (statusFilter !== 'all' && (p.status || 'pending') !== statusFilter) {
+    if (statusFilter === 'edits') {
+      if (!p.editPending || !p.pendingUpdates) return false;
+    } else if (statusFilter !== 'all' && (p.status || 'pending') !== statusFilter) {
       return false;
     }
     if (selectedStation !== 'All') {
@@ -257,6 +292,14 @@ export const AdminView: React.FC = () => {
         <span style={{ fontSize: '12px', background: '#fef3c7', color: '#92400e', padding: '3px 10px', borderRadius: '8px', fontWeight: 700 }}>
           ⏳ {pendingCount} Pending Approvals
         </span>
+        {editsPendingCount > 0 && (
+          <span
+            onClick={() => { setActiveSection('providers'); setStatusFilter('edits'); }}
+            style={{ fontSize: '12px', background: '#dbeafe', color: '#1d4ed8', padding: '3px 10px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', border: '1px solid #bfdbfe' }}
+          >
+            📝 {editsPendingCount} Profile Edit Requests (Action Required)
+          </span>
+        )}
         <span style={{ fontSize: '12px', background: '#dcfce7', color: '#166534', padding: '3px 10px', borderRadius: '8px', fontWeight: 700 }}>
           ✓ {approvedCount} Active Approved
         </span>
@@ -336,6 +379,7 @@ export const AdminView: React.FC = () => {
           <div style={{ display: 'flex', gap: '8px', padding: '14px 24px 10px', flexWrap: 'wrap', alignItems: 'center' }}>
             {[
               { id: 'pending', label: 'Pending Approvals', count: pendingCount, color: '#d97706' },
+              { id: 'edits', label: 'Profile Edit Requests 📝', count: editsPendingCount, color: '#2563eb' },
               { id: 'approved', label: 'Approved Providers', count: approvedCount, color: '#16a34a' },
               { id: 'suspended', label: 'Suspended', count: suspendedCount, color: '#9333ea' },
               { id: 'rejected', label: 'Rejected', count: rejectedCount, color: '#dc2626' },
@@ -346,7 +390,7 @@ export const AdminView: React.FC = () => {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setStatusFilter(tab.id as 'all' | 'pending' | 'approved' | 'rejected' | 'suspended')}
+                  onClick={() => setStatusFilter(tab.id as 'all' | 'pending' | 'approved' | 'rejected' | 'suspended' | 'edits')}
                   style={{
                     padding: '6px 14px',
                     borderRadius: '8px',
@@ -523,8 +567,18 @@ export const AdminView: React.FC = () => {
                         {/* Trade & Experience */}
                         <td className={styles.td}>
                           <div style={{ fontWeight: 600, color: '#0f172a' }}>{p.service || p.primaryService || 'General Trade'}</div>
-                          <div style={{ fontSize: '12px', color: '#4f46e5', fontWeight: 600 }}>
+                          {p.editPending && p.pendingUpdates?.service && p.pendingUpdates.service !== p.service && (
+                            <div style={{ fontSize: '11px', color: '#059669', fontWeight: 800, background: '#ecfdf5', border: '1px solid #a7f3d0', padding: '2px 6px', borderRadius: '4px', marginTop: '3px', display: 'inline-block' }}>
+                              ➔ Edit to: <strong>{p.pendingUpdates.service}</strong>
+                            </div>
+                          )}
+                          <div style={{ fontSize: '12px', color: '#4f46e5', fontWeight: 600, marginTop: '2px' }}>
                             {p.experienceYears || 1} yrs experience
+                            {p.editPending && p.pendingUpdates?.experienceYears !== undefined && p.pendingUpdates.experienceYears !== p.experienceYears && (
+                              <span style={{ color: '#059669', marginLeft: '4px' }}>
+                                (➔ {p.pendingUpdates.experienceYears} yrs)
+                              </span>
+                            )}
                           </div>
                         </td>
 
@@ -566,43 +620,61 @@ export const AdminView: React.FC = () => {
 
                         {/* Status Badge */}
                         <td className={styles.td}>
-                          <span
-                            className={[
-                              styles.badge,
-                              status === 'approved'
-                                ? styles.badgeApproved
-                                : status === 'pending'
-                                ? styles.badgePending
-                                : status === 'suspended'
-                                ? styles.badgePending
-                                : styles.badgeRejected,
-                            ].join(' ')}
-                            style={{
-                              background:
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                            <span
+                              className={[
+                                styles.badge,
                                 status === 'approved'
-                                  ? '#dcfce7'
+                                  ? styles.badgeApproved
                                   : status === 'pending'
-                                  ? '#fef3c7'
+                                  ? styles.badgePending
                                   : status === 'suspended'
-                                  ? '#f3e8ff'
-                                  : '#fee2e2',
-                              color:
-                                status === 'approved'
-                                  ? '#166534'
-                                  : status === 'pending'
-                                  ? '#92400e'
-                                  : status === 'suspended'
-                                  ? '#6b21a8'
-                                  : '#991b1b',
-                            }}
-                          >
-                            {status.toUpperCase()}
-                          </span>
+                                  ? styles.badgePending
+                                  : styles.badgeRejected,
+                              ].join(' ')}
+                              style={{
+                                background:
+                                  status === 'approved'
+                                    ? '#dcfce7'
+                                    : status === 'pending'
+                                    ? '#fef3c7'
+                                    : status === 'suspended'
+                                    ? '#f3e8ff'
+                                    : '#fee2e2',
+                                color:
+                                  status === 'approved'
+                                    ? '#166534'
+                                    : status === 'pending'
+                                    ? '#92400e'
+                                    : status === 'suspended'
+                                    ? '#6b21a8'
+                                    : '#991b1b',
+                              }}
+                            >
+                              {status.toUpperCase()}
+                            </span>
+                            {p.editPending && p.pendingUpdates && (
+                              <span
+                                style={{
+                                  background: '#dbeafe',
+                                  color: '#1e40af',
+                                  padding: '2px 7px',
+                                  borderRadius: '999px',
+                                  fontSize: '10px',
+                                  fontWeight: 800,
+                                  border: '1px solid #93c5fd',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                EDIT PENDING 📝
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Actions */}
                         <td className={styles.td} style={{ textAlign: 'right' }}>
-                          <div className={styles.actionsCell} style={{ justifyContent: 'flex-end' }}>
+                          <div className={styles.actionsCell} style={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                             <button
                               type="button"
                               onClick={() => setReviewingProvider(p)}
@@ -620,6 +692,27 @@ export const AdminView: React.FC = () => {
                             >
                               VIEW 🔍
                             </button>
+
+                            {p.editPending && p.pendingUpdates && (
+                              <button
+                                type="button"
+                                onClick={() => handleApproveEdit(p.id, p.name)}
+                                style={{
+                                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                                  border: 'none',
+                                  color: '#ffffff',
+                                  borderRadius: '6px',
+                                  padding: '5px 9px',
+                                  fontSize: '11px',
+                                  fontWeight: 800,
+                                  cursor: 'pointer',
+                                  boxShadow: '0 2px 4px rgba(16, 185, 129, 0.3)',
+                                }}
+                                title="Confirm and publish edited trade profile to live directory"
+                              >
+                                CONFIRM EDIT ✓
+                              </button>
+                            )}
 
                             {status !== 'approved' && (
                               <button
@@ -988,6 +1081,138 @@ export const AdminView: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Pending Profile Edit Confirmation Card */}
+            {reviewingProvider.editPending && reviewingProvider.pendingUpdates && (
+              <div
+                style={{
+                  background: '#f0fdf4',
+                  border: '2px solid #22c55e',
+                  borderRadius: '16px',
+                  padding: '18px 20px',
+                  marginBottom: '20px',
+                  boxShadow: '0 4px 12px rgba(34, 197, 94, 0.12)',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '20px' }}>📝</span>
+                    <strong style={{ fontSize: '15px', color: '#166534' }}>
+                      Profile Edit Request Awaiting Admin Confirmation
+                    </strong>
+                  </div>
+                  <span style={{ fontSize: '11px', background: '#dcfce7', color: '#15803d', padding: '3px 10px', borderRadius: '999px', fontWeight: 800, border: '1px solid #86efac' }}>
+                    EDIT PENDING
+                  </span>
+                </div>
+
+                <p style={{ margin: '0 0 14px 0', fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>
+                  The provider submitted changes to their professional listing. Review the proposed details below and click <strong>"CONFIRM & PUBLISH EDIT"</strong> to update the live public directory.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px', fontSize: '13px' }}>
+                  {/* Profession / Trade */}
+                  <div style={{ background: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                    <span style={{ color: '#64748b', fontWeight: 700, fontSize: '11px', display: 'block', marginBottom: '4px' }}>TRADE / PROFESSION:</span>
+                    <span style={{ color: '#dc2626', textDecoration: 'line-through' }}>{reviewingProvider.service || reviewingProvider.primaryService}</span>
+                    <span style={{ margin: '0 8px', color: '#16a34a', fontWeight: 800 }}>➔</span>
+                    <strong style={{ color: '#15803d', fontSize: '14px' }}>{reviewingProvider.pendingUpdates.service}</strong>
+                  </div>
+
+                  {/* Experience */}
+                  <div style={{ background: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                    <span style={{ color: '#64748b', fontWeight: 700, fontSize: '11px', display: 'block', marginBottom: '4px' }}>EXPERIENCE:</span>
+                    <span style={{ color: '#dc2626', textDecoration: 'line-through' }}>{reviewingProvider.experienceYears} yrs</span>
+                    <span style={{ margin: '0 8px', color: '#16a34a', fontWeight: 800 }}>➔</span>
+                    <strong style={{ color: '#15803d', fontSize: '14px' }}>{reviewingProvider.pendingUpdates.experienceYears} yrs</strong>
+                  </div>
+
+                  {/* Skills */}
+                  {reviewingProvider.pendingUpdates.skills && reviewingProvider.pendingUpdates.skills.length > 0 && (
+                    <div style={{ background: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #bbf7d0', gridColumn: '1 / -1' }}>
+                      <span style={{ color: '#64748b', fontWeight: 700, fontSize: '11px', display: 'block', marginBottom: '6px' }}>NEW REQUESTED SKILLS:</span>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {reviewingProvider.pendingUpdates.skills.map((s) => (
+                          <span key={s} style={{ background: '#dcfce7', color: '#166534', fontWeight: 700, padding: '3px 9px', borderRadius: '6px', fontSize: '12px' }}>
+                            ✓ {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Service Areas */}
+                  {reviewingProvider.pendingUpdates.serviceAreas && reviewingProvider.pendingUpdates.serviceAreas.length > 0 && (
+                    <div style={{ background: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #bbf7d0', gridColumn: '1 / -1' }}>
+                      <span style={{ color: '#64748b', fontWeight: 700, fontSize: '11px', display: 'block', marginBottom: '4px' }}>NEW SERVICE STATIONS:</span>
+                      <strong style={{ color: '#0f172a' }}>📍 {reviewingProvider.pendingUpdates.serviceAreas.join(', ')}</strong>
+                    </div>
+                  )}
+
+                  {/* Work Proof */}
+                  {(reviewingProvider.pendingUpdates.workProof || reviewingProvider.pendingUpdates.submittedProof) && (
+                    <div style={{ background: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #bbf7d0', gridColumn: '1 / -1' }}>
+                      <span style={{ color: '#64748b', fontWeight: 700, fontSize: '11px', display: 'block', marginBottom: '4px' }}>UPDATED TRADE PROOF:</span>
+                      <div style={{ wordBreak: 'break-all', fontWeight: 600, color: '#1e293b' }}>
+                        📄 {reviewingProvider.pendingUpdates.workProof || reviewingProvider.pendingUpdates.submittedProof}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  {reviewingProvider.pendingUpdates.description && (
+                    <div style={{ background: '#ffffff', padding: '12px', borderRadius: '10px', border: '1px solid #bbf7d0', gridColumn: '1 / -1' }}>
+                      <span style={{ color: '#64748b', fontWeight: 700, fontSize: '11px', display: 'block', marginBottom: '4px' }}>UPDATED DESCRIPTION:</span>
+                      <p style={{ margin: 0, color: '#334155', fontStyle: 'italic', lineHeight: 1.5 }}>
+                        "{reviewingProvider.pendingUpdates.description}"
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '16px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handleApproveEdit(reviewingProvider.id, reviewingProvider.name);
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: '200px',
+                      background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '11px 18px',
+                      fontSize: '13px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: '0 3px 8px rgba(22, 163, 74, 0.3)',
+                    }}
+                  >
+                    ✓ CONFIRM & PUBLISH EDIT
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handleRejectEdit(reviewingProvider.id, reviewingProvider.name);
+                    }}
+                    style={{
+                      background: '#ffffff',
+                      color: '#dc2626',
+                      border: '1.5px solid #fca5a5',
+                      borderRadius: '10px',
+                      padding: '11px 18px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ✕ REJECT EDIT
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Admin Manual Review Notice */}
             <div

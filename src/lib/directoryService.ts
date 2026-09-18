@@ -9,12 +9,13 @@ import {
   query,
   where,
   deleteDoc,
+  deleteField,
   orderBy,
   serverTimestamp,
   increment,
 } from 'firebase/firestore';
 import { db, DEMO_MODE } from './firebase';
-import type { Provider, ProviderStatus, Review, AppUser } from '../types';
+import type { Provider, ProviderStatus, Review, AppUser, ProviderPendingUpdates } from '../types';
 import { SERVICE_NAMES, type ServiceCategory } from '../constants/services';
 import { MUMBAI_LOCATIONS, type MumbaiLocation } from '../constants/locations';
 
@@ -757,6 +758,218 @@ export async function updateProviderProfile(
   );
   saveLocalProviders(existing);
 }
+
+// ─── Provider Action: Submit Profile Edits for Admin Confirmation ─────────
+/**
+ * When an approved provider edits skills, trades, service areas, proof, etc.,
+ * changes are staged as pendingUpdates with editPending: true.
+ * The live directory listing continues serving existing verified info until Admin approves.
+ */
+export async function submitProviderProfileEdit(
+  providerId: string,
+  updates: Partial<ProviderPendingUpdates>
+): Promise<void> {
+  if (updates.primaryService && !validateServiceCategory(updates.primaryService)) {
+    throw new Error(`Invalid service: "${updates.primaryService}". Service must be from the official 14 ServiceFinder trades.`);
+  }
+
+  if (updates.serviceAreas) {
+    for (const a of updates.serviceAreas) {
+      if (!validateMumbaiLocation(a)) {
+        throw new Error(`Invalid service area: "${a}". Location must be on Mumbai Western Line.`);
+      }
+    }
+  }
+
+  const now = new Date().toISOString();
+  const pendingUpdates: ProviderPendingUpdates = {
+    name: updates.name?.trim(),
+    service: updates.service || updates.primaryService,
+    primaryService: updates.primaryService || updates.service,
+    skills: updates.skills || [],
+    serviceArea: updates.serviceArea || updates.serviceAreas?.[0] || 'Borivali',
+    serviceAreas: updates.serviceAreas || [],
+    experienceYears: updates.experienceYears,
+    description: updates.description?.trim(),
+    workProof: updates.workProof?.trim() || updates.submittedProof?.trim() || '',
+    submittedProof: updates.submittedProof?.trim() || updates.workProof?.trim() || '',
+    phone: updates.phone?.trim(),
+    whatsapp: updates.whatsapp?.trim() || updates.phone?.trim(),
+    whatsappPhone: updates.whatsappPhone?.trim() || updates.whatsapp?.trim() || updates.phone?.trim(),
+    profileImage: updates.profileImage?.trim(),
+    requestedAt: now,
+  };
+
+  const patch = {
+    editPending: true,
+    pendingUpdates,
+    updatedAt: now,
+  };
+
+  if (!DEMO_MODE && db) {
+    try {
+      const ref = doc(db, 'providers', providerId);
+      await updateDoc(ref, patch);
+    } catch (err) {
+      console.warn('[directoryService] Firestore submitProviderProfileEdit failed:', err);
+    }
+  }
+
+  const existing = getLocalProviders().map((p) =>
+    p.id === providerId || p.uid === providerId
+      ? {
+          ...p,
+          ...patch,
+        }
+      : p
+  );
+  saveLocalProviders(existing);
+}
+
+// ─── Admin Action: Approve Provider Profile Edit ───────────────────────────
+/**
+ * Administrator confirms the provider's requested trade/skill/detail update.
+ * Merges pendingUpdates into the live provider profile, publishes to directory,
+ * and clears editPending.
+ */
+export async function approveProviderProfileEdit(
+  providerId: string,
+  adminUid?: string
+): Promise<void> {
+  const now = new Date().toISOString();
+  let providerToApprove: Provider | null = null;
+
+  if (!DEMO_MODE && db) {
+    try {
+      const snap = await getDoc(doc(db, 'providers', providerId));
+      if (snap.exists()) {
+        providerToApprove = { id: snap.id, ...snap.data() } as Provider;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!providerToApprove) {
+    providerToApprove = getLocalProviders().find((p) => p.id === providerId || p.uid === providerId) || null;
+  }
+
+  if (!providerToApprove || !providerToApprove.pendingUpdates) {
+    return;
+  }
+
+  const upd = providerToApprove.pendingUpdates;
+  const mergedName = upd.name?.trim() || providerToApprove.name;
+  const mergedService = (upd.service || upd.primaryService || providerToApprove.service) as ServiceCategory;
+  const mergedPrimaryService = (upd.primaryService || upd.service || providerToApprove.primaryService || mergedService) as ServiceCategory;
+  const mergedSkills = upd.skills && upd.skills.length > 0 ? upd.skills : providerToApprove.skills;
+  const mergedArea = upd.serviceArea || upd.serviceAreas?.[0] || providerToApprove.serviceArea;
+  const mergedAreas = upd.serviceAreas && upd.serviceAreas.length > 0 ? upd.serviceAreas : (providerToApprove.serviceAreas || [mergedArea]);
+  const mergedExp = upd.experienceYears !== undefined ? upd.experienceYears : providerToApprove.experienceYears;
+  const mergedDesc = upd.description !== undefined ? upd.description : providerToApprove.description;
+  const mergedWorkProof = upd.workProof !== undefined ? upd.workProof : (upd.submittedProof || providerToApprove.workProof || '');
+  const mergedPhone = upd.phone?.trim() || providerToApprove.phone;
+  const mergedWhatsapp = upd.whatsapp?.trim() || upd.whatsappPhone?.trim() || providerToApprove.whatsapp;
+  const mergedWhatsappPhone = upd.whatsappPhone?.trim() || upd.whatsapp?.trim() || providerToApprove.whatsappPhone;
+  const mergedProfileImg = upd.profileImage !== undefined ? upd.profileImage : providerToApprove.profileImage;
+
+  const patch: Record<string, unknown> = {
+    name: mergedName,
+    service: mergedService,
+    primaryService: mergedPrimaryService,
+    skills: mergedSkills,
+    serviceArea: mergedArea,
+    serviceAreas: mergedAreas,
+    experienceYears: mergedExp,
+    description: mergedDesc,
+    workProof: mergedWorkProof,
+    submittedProof: mergedWorkProof,
+    phone: mergedPhone,
+    whatsapp: mergedWhatsapp,
+    whatsappPhone: mergedWhatsappPhone,
+    ...(mergedProfileImg !== undefined ? { profileImage: mergedProfileImg } : {}),
+    editPending: false,
+    updatedAt: now,
+    lastEditedApprovedAt: now,
+    lastEditedApprovedBy: adminUid || 'admin',
+  };
+
+  if (!DEMO_MODE && db) {
+    try {
+      const ref = doc(db, 'providers', providerId);
+      await updateDoc(ref, {
+        ...patch,
+        pendingUpdates: deleteField(),
+      });
+
+      // Also sync user document if name or phone changed
+      try {
+        await updateDoc(doc(db, 'users', providerId), {
+          name: mergedName,
+          phone: mergedPhone,
+          updatedAt: now,
+        });
+      } catch {
+        // ignore
+      }
+    } catch (err) {
+      console.warn('[directoryService] Firestore approveProviderProfileEdit failed:', err);
+    }
+  }
+
+  const existing = getLocalProviders().map((p) => {
+    if (p.id === providerId || p.uid === providerId) {
+      const copy: Provider = { ...p, ...patch } as Provider;
+      delete copy.pendingUpdates;
+      return copy;
+    }
+    return p;
+  });
+  saveLocalProviders(existing);
+}
+
+// ─── Admin Action: Reject Provider Profile Edit ────────────────────────────
+/**
+ * Administrator rejects proposed profile edits. Provider's current approved listing
+ * remains intact.
+ */
+export async function rejectProviderProfileEdit(
+  providerId: string,
+  reason?: string
+): Promise<void> {
+  const now = new Date().toISOString();
+  if (!DEMO_MODE && db) {
+    try {
+      const ref = doc(db, 'providers', providerId);
+      await updateDoc(ref, {
+        editPending: false,
+        pendingUpdates: deleteField(),
+        editRejectedAt: now,
+        editRejectionReason: reason || 'Declined by administrator',
+        updatedAt: now,
+      });
+    } catch (err) {
+      console.warn('[directoryService] Firestore rejectProviderProfileEdit failed:', err);
+    }
+  }
+
+  const existing = getLocalProviders().map((p) => {
+    if (p.id === providerId || p.uid === providerId) {
+      const copy: Provider = {
+        ...p,
+        editPending: false,
+        editRejectedAt: now,
+        editRejectionReason: reason || 'Declined by administrator',
+        updatedAt: now,
+      };
+      delete copy.pendingUpdates;
+      return copy;
+    }
+    return p;
+  });
+  saveLocalProviders(existing);
+}
+
 
 // ─── Analytics Counters (Tracked User Direct Actions) ──────────────────────
 export async function incrementProfileViews(providerId: string): Promise<void> {
