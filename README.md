@@ -1,10 +1,19 @@
-# ⚡ ServiceFinder — Hyper-Local Mumbai Neighborhood Trade Directory
+<div align="center">
+  <img src="public/logo.png" alt="ServiceFinder Logo" width="160" style="border-radius: 20px;" />
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Cloudflare%20Workers-f38020?style=for-the-badge&logo=cloudflare)](https://servicefinder.service-finder.workers.dev)
-[![React 19](https://img.shields.io/badge/React-19.2-61dafb?style=for-the-badge&logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
-[![Firebase](https://img.shields.io/badge/Firebase-Firestore%20%26%20Auth-ffca28?style=for-the-badge&logo=firebase)](https://firebase.google.com/)
-[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers%20Edge-faae40?style=for-the-badge&logo=cloudflare)](https://workers.cloudflare.com/)
+  # ⚡ ServiceFinder
+  ### Hyper-Local Mumbai Neighborhood Trade Directory
+
+  [![Live Demo](https://img.shields.io/badge/Live%20Demo-Cloudflare%20Workers-f38020?style=for-the-badge&logo=cloudflare)](https://servicefinder.service-finder.workers.dev)
+  [![React 19](https://img.shields.io/badge/React-19.2-61dafb?style=for-the-badge&logo=react)](https://react.dev/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
+  [![Firebase](https://img.shields.io/badge/Firebase-Firestore%20%26%20Auth-ffca28?style=for-the-badge&logo=firebase)](https://firebase.google.com/)
+  [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers%20Edge-faae40?style=for-the-badge&logo=cloudflare)](https://workers.cloudflare.com/)
+
+  <p align="center">
+    <strong>Connecting residents across Mumbai's Western Railway corridor with verified local trade professionals.</strong>
+  </p>
+</div>
 
 > **ServiceFinder** is an on-demand, hyper-local neighborhood services directory engineered specifically for Mumbai's Western Railway corridor (Churchgate to Virar). It bridges local homeowners and residents with verified, background-checked trade professionals (Electricians, Plumbers, AC Technicians, Carpenters, Painters, and Appliance Specialists) through voice-enabled AI diagnosis, real-time railway station filtering, and transparent direct communication.
 
