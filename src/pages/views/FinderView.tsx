@@ -76,6 +76,30 @@ export const FinderView: React.FC = () => {
 
   return (
     <div className={styles.view}>
+      {state.user?.role === 'admin' && (
+        <div style={{
+          background: '#eef2ff',
+          border: '1.5px solid #c7d2fe',
+          borderRadius: '12px',
+          padding: '12px 18px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          fontSize: '13px',
+          color: '#3730a3',
+          fontWeight: 600,
+        }}>
+          <span style={{ fontSize: '20px' }}>🤖</span>
+          <div>
+            <div style={{ fontWeight: 800, color: '#1e1b4b', fontSize: '13.5px' }}>Admin Live AI Match Test Mode</div>
+            <div style={{ color: '#4338ca', fontWeight: 500, fontSize: '12.5px' }}>
+              Test Gemini AI natural language intent diagnosis and live provider retrieval exactly as experienced by Mumbai residents.
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className={styles.header}>
         <h1 className={styles.title}>✦ AI Smart Service Matcher</h1>
         <p className={styles.subtitle}>

@@ -224,11 +224,11 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onRegistered }) 
 
       <div className={styles.header}>
         <h1 className={styles.title}>
-          {isAdmin ? 'Admin Tradesman Onboarding' : 'Service Provider Registration'}
+          {isAdmin ? 'Direct Provider Onboarding' : 'Service Provider Registration'}
         </h1>
         <p className={styles.subtitle}>
           {isAdmin
-            ? 'Add and onboard verified local tradesmen directly into the ServiceFinder network across Mumbai Western Line.'
+            ? 'Manually onboard and instantly activate a verified service professional directly into the Mumbai live network without waiting in the public review queue.'
             : 'Register your local trade on ServiceFinder. Connect directly with residents in your Mumbai area with zero middleman commissions.'}
         </p>
       </div>

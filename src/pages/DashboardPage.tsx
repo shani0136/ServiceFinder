@@ -8,10 +8,11 @@ import { OnboardingView } from './views/OnboardingView';
 import { AdminView } from './views/AdminView';
 import { ProfileView } from './views/ProfileView';
 import { SettingsView } from './views/SettingsView';
+import type { DashboardView } from '../types';
 import styles from './DashboardPage.module.css';
 
 export const DashboardPage: React.FC = () => {
-  const { state, setView, setUser, toggleEmergency, addToast } = useApp();
+  const { state, setView, setPublicView, setUser, toggleEmergency, addToast } = useApp();
   const { logout } = useAuth();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -23,41 +24,47 @@ export const DashboardPage: React.FC = () => {
     addToast('Signed out successfully', 'info');
   };
 
+  const handleNavigateView = (view: DashboardView) => {
+    setView(view);
+    const hash = view === 'admin' ? '' : `#${view}`;
+    window.history.replaceState(null, '', `/admin/dashboard${hash}`);
+  };
+
   const renderView = () => {
     switch (state.currentView) {
       case 'admin':
         return <AdminView />;
-      case 'finder':
-        return <FinderView />;
       case 'directory':
         return <DirectoryView />;
       case 'onboarding':
-        return <OnboardingView onRegistered={() => setView('admin')} />;
+        return <OnboardingView onRegistered={() => handleNavigateView('admin')} />;
+      case 'finder':
+        return <FinderView />;
       case 'profile':
         return <ProfileView />;
       case 'settings':
         return <SettingsView />;
       default:
-        return user.role === 'admin' ? <AdminView /> : <FinderView />;
+        return <AdminView />;
     }
   };
 
   const getViewTitle = () => {
     switch (state.currentView) {
       case 'admin':
-        return 'Admin Dashboard';
-      case 'finder':
-        return 'AI Smart Finder';
+        return 'Admin Control Center';
       case 'directory':
-        return 'Service Directory';
+        return 'Verified Provider Directory';
       case 'onboarding':
-        return user.role === 'admin' ? 'Onboard Service Provider' : 'Register Provider';
+        return 'Direct Provider Onboarding';
+      case 'finder':
+        return 'AI Match Engine Preview';
       case 'profile':
-        return user.role === 'admin' ? 'Admin Profile' : 'User Profile';
+        return 'Administrator Profile';
       case 'settings':
-        return 'App Settings';
+        return 'Platform Settings';
       default:
-        return user.role === 'admin' ? 'Admin Dashboard' : 'Dashboard';
+        return 'Admin Control Center';
     }
   };
 
@@ -67,10 +74,14 @@ export const DashboardPage: React.FC = () => {
       <Sidebar
         currentView={state.currentView}
         user={user}
-        onNavigate={setView}
+        onNavigate={handleNavigateView}
         onLogout={handleLogout}
         mobileOpen={mobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}
+        onVisitCustomerSite={() => {
+          setPublicView('customer_home');
+          window.history.pushState(null, '', '/customer_home');
+        }}
       />
 
       {/* Main Workspace Area */}

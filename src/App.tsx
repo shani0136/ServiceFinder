@@ -17,7 +17,7 @@ import { AuthModal } from './components/ui/AuthModal';
 import { ContactAuthModal } from './components/ui/ContactAuthModal';
 import { AmbientBackground } from './components/layout/AmbientBackground';
 import { CookieConsent } from './components/ui/CookieConsent';
-import type { AppUser, PublicView } from './types';
+import type { AppUser, PublicView, DashboardView } from './types';
 import './index.css';
 
 /**
@@ -109,10 +109,15 @@ function MainRouter() {
         return;
       }
 
-      if (route === '/admin/dashboard' || route === 'admin/dashboard' || route === '/admin' || route === 'admin') {
+      if (route === '/admin/dashboard' || route === 'admin/dashboard' || route === '/admin' || route === 'admin' || pathname === '/admin/dashboard' || pathname === '/admin') {
         if (state.user?.role === 'admin') {
-          setView('admin');
           setPublicView('admin');
+          const validViews: DashboardView[] = ['admin', 'directory', 'onboarding', 'finder', 'profile', 'settings'];
+          if (hash && validViews.includes(hash as DashboardView)) {
+            setView(hash as DashboardView);
+          } else {
+            setView('admin');
+          }
         } else {
           // Protected route: unauthorized users redirected to login
           setPublicView('admin_login');
