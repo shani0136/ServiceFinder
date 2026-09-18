@@ -117,17 +117,22 @@ export const AdminView: React.FC = () => {
     }
   };
 
-  const handleDeleteProvider = async (id: string, name: string) => {
+  const handleDeleteProvider = async (id: string, name: string, uid?: string, email?: string) => {
     if (!window.confirm(`Are you sure you want to permanently delete the profile of "${name}"?`)) {
       return;
     }
     try {
-      await deleteProviderForAdmin(id);
-      setProviders((prev) => prev.filter((p) => p.id !== id && p.uid !== id));
+      await deleteProviderForAdmin(id, uid, email);
+      setProviders((prev) => prev.filter((p) =>
+        p.id !== id &&
+        p.uid !== id &&
+        (!uid || (p.id !== uid && p.uid !== uid)) &&
+        (!email || p.email !== email)
+      ));
       if (reviewingProvider?.id === id || reviewingProvider?.uid === id) {
         setReviewingProvider(null);
       }
-      addToast(`Provider "${name}" removed.`, 'info');
+      addToast(`Provider "${name}" permanently removed.`, 'info');
     } catch {
       addToast('Failed to delete provider record.', 'error');
     }
@@ -652,7 +657,7 @@ export const AdminView: React.FC = () => {
 
                             <button
                               type="button"
-                              onClick={() => handleDeleteProvider(p.id, p.name)}
+                              onClick={() => handleDeleteProvider(p.id, p.name, p.uid, p.email)}
                               style={{
                                 background: '#f8fafc',
                                 border: '1px solid #e2e8f0',
@@ -1184,7 +1189,12 @@ export const AdminView: React.FC = () => {
               <button
                 type="button"
                 onClick={async () => {
-                  await handleDeleteProvider(reviewingProvider.id, reviewingProvider.name);
+                  await handleDeleteProvider(
+                    reviewingProvider.id,
+                    reviewingProvider.name,
+                    reviewingProvider.uid,
+                    reviewingProvider.email
+                  );
                 }}
                 style={{
                   background: '#fee2e2',

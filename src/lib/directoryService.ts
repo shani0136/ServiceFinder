@@ -162,9 +162,45 @@ export async function getApprovedProviders(
   });
 }
 
+const STORAGE_DELETED_PROVIDERS_KEY = 'sf_deleted_providers_v2';
+
+export function getDeletedProviderTokens(): string[] {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_DELETED_PROVIDERS_KEY) : null;
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addDeletedProviderTokens(tokens: string[]) {
+  try {
+    const current = getDeletedProviderTokens();
+    const cleanTokens = tokens.map(t => (t || '').trim().toLowerCase()).filter(Boolean);
+    const updated = Array.from(new Set([...current, ...cleanTokens]));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_DELETED_PROVIDERS_KEY, JSON.stringify(updated));
+    }
+  } catch {
+    // ignore
+  }
+}
+
 // ─── Admin Review Queue: Fetch All Provider Registrations & Sync ──────────
 export async function getAllProvidersForAdmin(): Promise<Provider[]> {
   const providerMap = new Map<string, Provider>();
+  const deletedTokens = getDeletedProviderTokens();
+
+  const isTombstoned = (id?: string, uid?: string, email?: string): boolean => {
+    const cleanId = (id || '').toLowerCase();
+    const cleanUid = (uid || '').toLowerCase();
+    const cleanEmail = (email || '').toLowerCase();
+    return deletedTokens.some(t =>
+      (cleanId && t === cleanId) ||
+      (cleanUid && t === cleanUid) ||
+      (cleanEmail && t === cleanEmail)
+    );
+  };
 
   if (!DEMO_MODE && db) {
     const firestore = db;
@@ -173,17 +209,19 @@ export async function getAllProvidersForAdmin(): Promise<Provider[]> {
       const snap = await getDocs(collection(firestore, 'providers'));
       snap.forEach((d) => {
         const p = { id: d.id, ...d.data() } as Provider;
-        providerMap.set(p.id, p);
-        if (p.uid) providerMap.set(p.uid, p);
+        if (!isTombstoned(p.id, p.uid, p.email)) {
+          providerMap.set(p.id, p);
+          if (p.uid) providerMap.set(p.uid, p);
+        }
       });
 
-      // 2. Fetch from 'providers_draft' collection
+      // 2. Fetch from 'providers_draft' collection (read only, NO setDoc resurrection)
       try {
         const draftSnap = await getDocs(collection(firestore, 'providers_draft'));
         draftSnap.forEach((d) => {
           const draft = d.data();
           const targetId = draft.uid || d.id;
-          if (!providerMap.has(targetId) && !providerMap.has(d.id)) {
+          if (!isTombstoned(targetId, d.id, draft.email) && !providerMap.has(targetId) && !providerMap.has(d.id)) {
             const newProv: Provider = {
               id: targetId,
               uid: targetId,
@@ -208,21 +246,20 @@ export async function getAllProvidersForAdmin(): Promise<Provider[]> {
               createdAt: draft.createdAt || new Date().toISOString(),
             };
             providerMap.set(targetId, newProv);
-            setDoc(doc(firestore, 'providers', targetId), newProv, { merge: true }).catch(() => {});
           }
         });
       } catch (draftErr) {
         console.warn('[directoryService] Draft query notice:', draftErr);
       }
 
-      // 3. Fetch from 'users' collection where role === 'provider'
+      // 3. Fetch from 'users' collection where role === 'provider' (read only, NO setDoc resurrection)
       try {
         const usersSnap = await getDocs(collection(firestore, 'users'));
         usersSnap.forEach((d) => {
           const u = d.data();
           if (u.role === 'provider' && u.phone) {
             const targetId = u.uid || d.id;
-            if (!providerMap.has(targetId) && !providerMap.has(d.id)) {
+            if (!isTombstoned(targetId, d.id, u.email) && !providerMap.has(targetId) && !providerMap.has(d.id)) {
               const newProv: Provider = {
                 id: targetId,
                 uid: targetId,
@@ -247,7 +284,6 @@ export async function getAllProvidersForAdmin(): Promise<Provider[]> {
                 createdAt: u.createdAt && typeof u.createdAt === 'string' ? u.createdAt : new Date().toISOString(),
               };
               providerMap.set(targetId, newProv);
-              setDoc(doc(firestore, 'providers', targetId), newProv, { merge: true }).catch(() => {});
             }
           }
         });
@@ -255,7 +291,7 @@ export async function getAllProvidersForAdmin(): Promise<Provider[]> {
         console.warn('[directoryService] Users provider query notice:', usersErr);
       }
 
-      const deduplicated = Array.from(new Set(providerMap.values()));
+      const deduplicated = Array.from(new Set(providerMap.values())).filter(p => !isTombstoned(p.id, p.uid, p.email));
       saveLocalProviders(deduplicated);
       return deduplicated;
     } catch (err) {
@@ -263,7 +299,8 @@ export async function getAllProvidersForAdmin(): Promise<Provider[]> {
     }
   }
 
-  return getLocalProviders();
+  const local = getLocalProviders().filter(p => !isTombstoned(p.id, p.uid, p.email));
+  return local;
 }
 
 // ─── Admin Users Directory: Fetch All Registered Customers & Providers ─────
@@ -346,16 +383,60 @@ export async function getAllUsersForAdmin(): Promise<AppUser[]> {
 }
 
 // ─── Admin Delete Actions: Provider and User Records ─────────────────────────
-export async function deleteProviderForAdmin(providerId: string): Promise<void> {
+export async function deleteProviderForAdmin(
+  providerId: string,
+  providerUid?: string,
+  providerEmail?: string
+): Promise<void> {
+  const rawTokens = [providerId, providerUid, providerEmail].filter(Boolean) as string[];
+  addDeletedProviderTokens(rawTokens);
+
   if (!DEMO_MODE && db) {
     const firestore = db;
-    try {
-      await deleteDoc(doc(firestore, 'providers', providerId));
-    } catch (err) {
-      console.warn('[directoryService] Firestore delete provider failed:', err);
+    const docIds = Array.from(new Set([providerId, providerUid].filter(Boolean) as string[]));
+    for (const docId of docIds) {
+      try {
+        await Promise.allSettled([
+          deleteDoc(doc(firestore, 'providers', docId)),
+          deleteDoc(doc(firestore, 'providers_draft', docId)),
+          updateDoc(doc(firestore, 'users', docId), { role: 'customer' }),
+        ]);
+      } catch (err) {
+        console.warn('[directoryService] Firestore delete error for id:', docId, err);
+      }
+    }
+
+    if (providerEmail) {
+      const cleanEmail = providerEmail.trim().toLowerCase();
+      try {
+        const qUsers = query(collection(firestore, 'users'), where('email', '==', cleanEmail));
+        const uSnap = await getDocs(qUsers);
+        for (const uDoc of uSnap.docs) {
+          updateDoc(doc(firestore, 'users', uDoc.id), { role: 'customer' }).catch(() => {});
+        }
+      } catch {
+        // ignore
+      }
+      try {
+        const qDrafts = query(collection(firestore, 'providers_draft'), where('email', '==', cleanEmail));
+        const dSnap = await getDocs(qDrafts);
+        for (const dDoc of dSnap.docs) {
+          deleteDoc(doc(firestore, 'providers_draft', dDoc.id)).catch(() => {});
+        }
+      } catch {
+        // ignore
+      }
     }
   }
-  const existing = getLocalProviders().filter((p) => p.id !== providerId && p.uid !== providerId);
+
+  // Purge from local storage cache
+  const deletedTokens = getDeletedProviderTokens();
+  const existing = getLocalProviders().filter((p) => {
+    const pId = (p.id || '').toLowerCase();
+    const pUid = (p.uid || '').toLowerCase();
+    const pEmail = (p.email || '').toLowerCase();
+    return !deletedTokens.some(t => (pId && t === pId) || (pUid && t === pUid) || (pEmail && t === pEmail));
+  });
   saveLocalProviders(existing);
 }
 
