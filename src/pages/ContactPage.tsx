@@ -12,9 +12,19 @@ interface ContactPageProps {
   onSignIn: () => void;
 }
 
+const PROVIDER_INQUIRY_TOPICS = [
+  'Profile Verification & Application Status',
+  'Update Trade, Skills or Service Areas',
+  'WhatsApp Enquiries & Direct Customer Leads',
+  'Account & Phone Number Details Change',
+  'Report an Issue or Technical Assistance',
+  'General Provider Partner Inquiry',
+];
+
 export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }) => {
   const { state, addToast } = useApp();
   const user = state.user;
+  const isProvider = user?.role === 'provider';
 
   const [formData, setFormData] = useState({
     name: '',
@@ -22,6 +32,7 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
     email: '',
     area: 'Borivali',
     service: 'Electrician',
+    inquiryTopic: 'Profile Verification & Application Status',
     message: '',
   });
   const [submitting, setSubmitting] = useState(false);
@@ -35,6 +46,24 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
         email: user.email || prev.email,
         phone: user.phone || prev.phone,
       }));
+      if (user.role === 'provider') {
+        try {
+          const raw = localStorage.getItem('sf_providers_store');
+          if (raw) {
+            const list = JSON.parse(raw);
+            const found = list.find((p: any) => p.uid === user.uid || p.id === user.uid);
+            if (found) {
+              setFormData((prev) => ({
+                ...prev,
+                service: found.service || found.primaryService || prev.service,
+                area: found.serviceArea || found.serviceAreas?.[0] || prev.area,
+              }));
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
     }
     if (state.selectedArea) {
       setFormData((prev) => ({ ...prev, area: state.selectedArea }));
@@ -52,7 +81,11 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
     setTimeout(() => {
       setSubmitting(false);
       setSubmitted(true);
-      addToast('Callback request received! Our Mumbai desk will call you within 15 minutes.', 'success');
+      if (isProvider) {
+        addToast('Provider support request received! Our partner relations desk will call you within 15 minutes.', 'success');
+      } else {
+        addToast('Callback request received! Our Mumbai desk will call you within 15 minutes.', 'success');
+      }
     }, 500);
   };
 
@@ -83,13 +116,15 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
                 marginBottom: '10px',
               }}
             >
-              Mumbai Western Line Customer Helpdesk
+              {isProvider ? '⚡ Service Provider Partner Operations Desk' : 'Mumbai Western Line Customer Helpdesk'}
             </span>
             <h1 style={{ fontSize: 'clamp(1.9rem, 4.5vw, 2.75rem)', fontWeight: 900, letterSpacing: '-0.03em', color: '#0f172a', margin: '0 0 14px' }}>
-              Contact ServiceFinder Support
+              {isProvider ? 'Service Provider Help & Support' : 'Contact ServiceFinder Support'}
             </h1>
             <p style={{ color: 'var(--muted)', fontSize: 'var(--text-base)', lineHeight: 1.6, margin: 0 }}>
-              Need help finding a vetted technician, resolving a booking query, or registering as a tradesman? Our local Mumbai team is here to assist you.
+              {isProvider
+                ? 'Need help with your provider profile, verification status, trade updates, or operating stations? Our Mumbai provider relations team is here to assist you.'
+                : 'Need help finding a vetted technician, resolving a booking query, or registering as a tradesman? Our local Mumbai team is here to assist you.'}
             </p>
           </div>
 
@@ -125,19 +160,23 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
                 </span>
               </div>
               <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Instant Call Helpline
+                {isProvider ? 'Partner Phone Support' : 'Instant Call Helpline'}
               </span>
               <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
                 +91 84237 73933
               </span>
               <span style={{ fontSize: '12px', color: '#2563eb', fontWeight: 600 }}>
-                Direct Mumbai Phone Support →
+                {isProvider ? 'Direct Provider Desk Assistance →' : 'Direct Mumbai Phone Support →'}
               </span>
             </a>
 
             {/* WhatsApp */}
             <a
-              href="https://wa.me/918423773933?text=Hello%20ServiceFinder%20Support%2C%20I%20need%20help%20with%20a%20local%20service%20in%20Mumbai"
+              href={
+                isProvider
+                  ? 'https://wa.me/918423773933?text=Hello%20ServiceFinder%20Support%2C%20I%20am%20a%20registered%20Service%20Provider%20and%20need%20assistance'
+                  : 'https://wa.me/918423773933?text=Hello%20ServiceFinder%20Support%2C%20I%20need%20help%20with%20a%20local%20service%20in%20Mumbai'
+              }
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -160,19 +199,23 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
                 </span>
               </div>
               <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Direct WhatsApp Support
+                {isProvider ? 'Partner WhatsApp Desk' : 'Direct WhatsApp Support'}
               </span>
               <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
                 +91 84237 73933
               </span>
               <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>
-                Start WhatsApp Conversation →
+                {isProvider ? 'Start Partner WhatsApp Conversation →' : 'Start WhatsApp Conversation →'}
               </span>
             </a>
 
             {/* Email */}
             <a
-              href="mailto:support@servicefinder.in?subject=ServiceFinder%20Customer%20Support%20Request"
+              href={
+                isProvider
+                  ? 'mailto:support@servicefinder.in?subject=ServiceFinder%20Provider%20Support%20Request'
+                  : 'mailto:support@servicefinder.in?subject=ServiceFinder%20Customer%20Support%20Request'
+              }
               style={{
                 background: '#ffffff',
                 border: '1.5px solid #e9d5ff',
@@ -193,7 +236,7 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
                 </span>
               </div>
               <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Official Support Email
+                {isProvider ? 'Provider Relations Email' : 'Official Support Email'}
               </span>
               <span style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
                 support@servicefinder.in
@@ -219,11 +262,11 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '28px' }}>📍</span>
                 <span style={{ fontSize: '11px', fontWeight: 800, color: '#ea580c', background: '#fff7ed', padding: '3px 8px', borderRadius: '6px' }}>
-                  HEADQUARTERS
+                  OPERATIONS
                 </span>
               </div>
               <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Mumbai Operations Hub
+                {isProvider ? 'Western Line Partner Hub' : 'Mumbai Operations Hub'}
               </span>
               <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
                 Borivali West, Mumbai 400092
@@ -257,10 +300,18 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
                 <div style={{ textAlign: 'center', padding: '32px 16px' }}>
                   <span style={{ fontSize: '48px', display: 'block', marginBottom: '12px' }}>✅</span>
                   <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#166534', margin: '0 0 8px' }}>
-                    Request Received, {formData.name}!
+                    {isProvider ? `Support Request Received, ${formData.name}!` : `Request Received, ${formData.name}!`}
                   </h3>
                   <p style={{ color: '#15803d', fontSize: '14px', lineHeight: 1.6, maxWidth: '420px', margin: '0 auto 20px' }}>
-                    A neighborhood coordinator will connect with you directly at <strong>{formData.phone}</strong> regarding your {formData.service} request in <strong>{formData.area}</strong>.
+                    {isProvider ? (
+                      <>
+                        Our Mumbai provider relations coordinator will call you directly at <strong>{formData.phone}</strong> regarding your <strong>{formData.service}</strong> listing in <strong>{formData.area}</strong>.
+                      </>
+                    ) : (
+                      <>
+                        A neighborhood coordinator will connect with you directly at <strong>{formData.phone}</strong> regarding your {formData.service} request in <strong>{formData.area}</strong>.
+                      </>
+                    )}
                   </p>
                   <button
                     type="button"
@@ -283,21 +334,23 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
                 <form onSubmit={handleSubmit}>
                   <div style={{ marginBottom: '18px' }}>
                     <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: '0 0 4px' }}>
-                      Request Customer Callback / Assistance
+                      {isProvider ? 'Request Provider Help & Support Callback' : 'Request Customer Callback / Assistance'}
                     </h2>
                     <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
-                      Provide your trade requirement and an authorized support coordinator will phone you directly.
+                      {isProvider
+                        ? 'Provide your trade details and an authorized partner support coordinator will phone you directly.'
+                        : 'Provide your trade requirement and an authorized support coordinator will phone you directly.'}
                     </p>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '14px' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                        Your Full Name *
+                        {isProvider ? 'Your Provider Name *' : 'Your Full Name *'}
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. Ramesh Mehta"
+                        placeholder={isProvider ? 'e.g. Ramesh Mehta (Technician)' : 'e.g. Ramesh Mehta'}
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         required
@@ -339,7 +392,7 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '14px' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                        Mumbai Western Line Station
+                        {isProvider ? 'Primary Operating Station' : 'Mumbai Western Line Station'}
                       </label>
                       <select
                         value={formData.area}
@@ -365,7 +418,7 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
 
                     <div>
                       <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                        Service Required
+                        {isProvider ? 'Your Trade / Profession' : 'Service Required'}
                       </label>
                       <select
                         value={formData.service}
@@ -390,12 +443,44 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
                     </div>
                   </div>
 
+                  {isProvider && (
+                    <div style={{ marginBottom: '14px' }}>
+                      <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                        Inquiry Topic / Category
+                      </label>
+                      <select
+                        value={formData.inquiryTopic}
+                        onChange={(e) => setFormData({ ...formData, inquiryTopic: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          border: '1.5px solid #cbd5e1',
+                          fontSize: '13.5px',
+                          background: '#ffffff',
+                          cursor: 'pointer',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        {PROVIDER_INQUIRY_TOPICS.map((topic) => (
+                          <option key={topic} value={topic}>
+                            {topic}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div style={{ marginBottom: '18px' }}>
                     <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                      Problem Details / Notes (Optional)
+                      {isProvider ? 'Inquiry / Issue Details (Optional)' : 'Problem Details / Notes (Optional)'}
                     </label>
                     <textarea
-                      placeholder="Briefly describe your appliance breakdown, electrical repair, or inquiry..."
+                      placeholder={
+                        isProvider
+                          ? 'Describe your question regarding profile verification, trade change request, or listing assistance...'
+                          : 'Briefly describe your appliance breakdown, electrical repair, or inquiry...'
+                      }
                       value={formData.message}
                       onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                       rows={3}
@@ -413,7 +498,11 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
                   </div>
 
                   <GlowButton type="submit" size="lg" fullWidth disabled={submitting}>
-                    {submitting ? 'Submitting Callback Request…' : 'Request Instant Callback 📞'}
+                    {submitting
+                      ? 'Submitting Request…'
+                      : isProvider
+                      ? 'Request Provider Support Callback 📞'
+                      : 'Request Instant Callback 📞'}
                   </GlowButton>
                 </form>
               )}
@@ -437,10 +526,18 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
                   </h3>
                 </div>
                 <p style={{ fontSize: '13.5px', color: '#475569', lineHeight: 1.6, margin: '0 0 12px' }}>
-                  <strong>Regular Desk Hours:</strong> 8:00 AM – 9:00 PM IST (Monday through Sunday).
+                  <strong>{isProvider ? 'Partner Desk Hours:' : 'Regular Desk Hours:'}</strong> 8:00 AM – 9:00 PM IST (Monday through Sunday).
                 </p>
                 <p style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.5, margin: 0 }}>
-                  🚨 <strong>Emergency Repairs:</strong> For critical household issues like short circuits, active pipe bursts, or electrical hazards, our automated directory connects you directly to available night technicians along the Western Line.
+                  {isProvider ? (
+                    <>
+                      ⚡ <strong>Priority Provider Queue:</strong> Fast-track verification and technical assistance for registered Mumbai Western Line tradesmen.
+                    </>
+                  ) : (
+                    <>
+                      🚨 <strong>Emergency Repairs:</strong> For critical household issues like short circuits, active pipe bursts, or electrical hazards, our automated directory connects you directly to available night technicians along the Western Line.
+                    </>
+                  )}
                 </p>
               </div>
 
@@ -454,44 +551,102 @@ export const ContactPage: React.FC<ContactPageProps> = ({ onNavigate, onSignIn }
                 }}
               >
                 <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: '0 0 10px' }}>
-                  Zero Platform Commission Guarantee
+                  {isProvider ? '100% Commission-Free Platform Guarantee' : 'Zero Platform Commission Guarantee'}
                 </h3>
-                <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.6, margin: '0 0 12px' }}>
-                  ServiceFinder charges residents ₹0 to connect with tradesmen. You pay the visiting technician directly via cash or UPI for work performed.
+                <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.6, margin: '0 0 14px' }}>
+                  {isProvider
+                    ? 'ServiceFinder charges providers ₹0 commission on work performed. You receive and keep 100% of your earnings directly from customers via cash or UPI.'
+                    : 'ServiceFinder charges residents ₹0 to connect with tradesmen. You pay the visiting technician directly via cash or UPI for work performed.'}
                 </p>
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('providers')}
-                    style={{
-                      padding: '8px 16px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      background: '#f8fafc',
-                      fontSize: '12.5px',
-                      fontWeight: 700,
-                      color: '#0f172a',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Browse Providers →
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('services')}
-                    style={{
-                      padding: '8px 16px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      background: '#f8fafc',
-                      fontSize: '12.5px',
-                      fontWeight: 700,
-                      color: '#0f172a',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    View All 14 Categories →
-                  </button>
+                  {isProvider ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('provider')}
+                        style={{
+                          padding: '9px 18px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          background: '#4f46e5',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                          color: '#ffffff',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)',
+                        }}
+                      >
+                        Go to Provider Portal →
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('terms')}
+                        style={{
+                          padding: '9px 16px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          background: '#f8fafc',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                          color: '#0f172a',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Terms & Conditions
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('privacy')}
+                        style={{
+                          padding: '9px 16px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          background: '#f8fafc',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                          color: '#0f172a',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Privacy Policy
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('providers')}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          background: '#f8fafc',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                          color: '#0f172a',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Browse Providers →
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('services')}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          background: '#f8fafc',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                          color: '#0f172a',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        View All 14 Categories →
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
