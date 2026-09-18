@@ -14,18 +14,39 @@ import {
 } from '../../lib/directoryService';
 import { MUMBAI_LOCATIONS } from '../../constants/locations';
 import type { Provider, ProviderStatus, AppUser, CallbackRequest, CallbackRequestStatus } from '../../types';
+import { OnboardingView } from './OnboardingView';
 import styles from './AdminView.module.css';
 
-export const AdminView: React.FC = () => {
+interface AdminViewProps {
+  initialSection?: 'overview' | 'providers' | 'users' | 'callbacks';
+  onSectionChange?: (section: 'overview' | 'providers' | 'users' | 'callbacks') => void;
+}
+
+export const AdminView: React.FC<AdminViewProps> = ({
+  initialSection = 'overview',
+  onSectionChange,
+}) => {
   const { addToast } = useApp();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [callbacks, setCallbacks] = useState<CallbackRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewingProvider, setReviewingProvider] = useState<Provider | null>(null);
+  const [showAddProviderModal, setShowAddProviderModal] = useState(false);
 
-  // Main Section Tab: 'providers' | 'users' | 'callbacks'
-  const [activeSection, setActiveSection] = useState<'providers' | 'users' | 'callbacks'>('providers');
+  // Main Section Tab: 'overview' | 'providers' | 'users' | 'callbacks'
+  const [activeSection, setActiveSection] = useState<'overview' | 'providers' | 'users' | 'callbacks'>(initialSection);
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+    }
+  }, [initialSection]);
+
+  const handleSectionSwitch = (sec: 'overview' | 'providers' | 'users' | 'callbacks') => {
+    setActiveSection(sec);
+    if (onSectionChange) onSectionChange(sec);
+  };
 
   // Provider Queue Filter
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'suspended' | 'edits'>('pending');
@@ -395,11 +416,32 @@ export const AdminView: React.FC = () => {
         </span>
       </div>
 
-      {/* Section Switcher (Providers vs Users vs Callbacks) */}
-      <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '5px', borderRadius: '12px', width: 'fit-content' }}>
+      {/* Section Switcher (Overview vs Providers vs Users vs Callbacks) */}
+      <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '5px', borderRadius: '12px', width: 'fit-content', flexWrap: 'wrap' }}>
         <button
           type="button"
-          onClick={() => setActiveSection('providers')}
+          onClick={() => handleSectionSwitch('overview')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '9px',
+            border: 'none',
+            background: activeSection === 'overview' ? '#ffffff' : 'transparent',
+            color: activeSection === 'overview' ? '#0f172a' : '#64748b',
+            fontWeight: activeSection === 'overview' ? 800 : 600,
+            fontSize: '13px',
+            cursor: 'pointer',
+            boxShadow: activeSection === 'overview' ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span>📊 Dashboard Overview</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleSectionSwitch('providers')}
           style={{
             padding: '8px 18px',
             borderRadius: '9px',
@@ -415,7 +457,7 @@ export const AdminView: React.FC = () => {
             gap: '8px',
           }}
         >
-          <span>🛠️ Service Provider Queue</span>
+          <span>🛠️ Service Providers</span>
           <span style={{ background: activeSection === 'providers' ? '#4f46e5' : '#cbd5e1', color: '#ffffff', padding: '1px 7px', borderRadius: '999px', fontSize: '11px', fontWeight: 700 }}>
             {providers.length}
           </span>
@@ -423,7 +465,7 @@ export const AdminView: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => setActiveSection('users')}
+          onClick={() => handleSectionSwitch('users')}
           style={{
             padding: '8px 18px',
             borderRadius: '9px',
@@ -439,7 +481,7 @@ export const AdminView: React.FC = () => {
             gap: '8px',
           }}
         >
-          <span>👥 Registered Users & Customers</span>
+          <span>👥 User Accounts</span>
           <span style={{ background: activeSection === 'users' ? '#4f46e5' : '#cbd5e1', color: '#ffffff', padding: '1px 7px', borderRadius: '999px', fontSize: '11px', fontWeight: 700 }}>
             {users.length}
           </span>
@@ -447,7 +489,7 @@ export const AdminView: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => setActiveSection('callbacks')}
+          onClick={() => handleSectionSwitch('callbacks')}
           style={{
             padding: '8px 18px',
             borderRadius: '9px',
@@ -479,6 +521,134 @@ export const AdminView: React.FC = () => {
         </button>
       </div>
 
+      {/* ─── SECTION 0: DASHBOARD OVERVIEW ─── */}
+      {activeSection === 'overview' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Action Required Cards */}
+          {(pendingCount > 0 || editsPendingCount > 0 || pendingCallbacksCount > 0) && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+              {pendingCount > 0 && (
+                <div style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: '14px', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#b45309', textTransform: 'uppercase' }}>Action Required</div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#78350f', marginTop: '2px' }}>{pendingCount} Provider Applications</div>
+                    <div style={{ fontSize: '12px', color: '#92400e' }}>Awaiting credential check & approval</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { handleSectionSwitch('providers'); setStatusFilter('pending'); }}
+                    style={{ background: '#d97706', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Review Queue →
+                  </button>
+                </div>
+              )}
+
+              {editsPendingCount > 0 && (
+                <div style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: '14px', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase' }}>Profile Updates</div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#1e3a8a', marginTop: '2px' }}>{editsPendingCount} Edit Approvals</div>
+                    <div style={{ fontSize: '12px', color: '#1e40af' }}>Providers modified their profile details</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { handleSectionSwitch('providers'); setStatusFilter('edits'); }}
+                    style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Review Edits →
+                  </button>
+                </div>
+              )}
+
+              {pendingCallbacksCount > 0 && (
+                <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: '14px', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#b91c1c', textTransform: 'uppercase' }}>Inquiries Pending</div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#7f1d1d', marginTop: '2px' }}>{pendingCallbacksCount} Customer / Pro Inquiries</div>
+                    <div style={{ fontSize: '12px', color: '#991b1b' }}>Call back requests need attention</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { handleSectionSwitch('callbacks'); setCallbackFilter('pending'); }}
+                    style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    View Inquiries →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Quick Management Hub */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>Service Providers</h3>
+                  <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0' }}>{approvedCount} active approved & live in directory</p>
+                </div>
+                <span style={{ fontSize: '24px' }}>🛠️</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
+                <button
+                  type="button"
+                  onClick={() => handleSectionSwitch('providers')}
+                  style={{ flex: 1, background: '#f8fafc', border: '1.5px solid #cbd5e1', borderRadius: '10px', padding: '8px 12px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
+                >
+                  Manage Providers →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddProviderModal(true)}
+                  style={{ background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '10px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <span>➕</span> Onboard
+                </button>
+              </div>
+            </div>
+
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>User Accounts</h3>
+                  <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0' }}>{users.length} total registered accounts</p>
+                </div>
+                <span style={{ fontSize: '24px' }}>👥</span>
+              </div>
+              <div style={{ marginTop: 'auto' }}>
+                <button
+                  type="button"
+                  onClick={() => handleSectionSwitch('users')}
+                  style={{ width: '100%', background: '#f8fafc', border: '1.5px solid #cbd5e1', borderRadius: '10px', padding: '8px 12px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
+                >
+                  Inspect User Accounts →
+                </button>
+              </div>
+            </div>
+
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', margin: 0 }}>Support & Callbacks</h3>
+                  <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0' }}>{callbacks.length} customer and provider inquiries</p>
+                </div>
+                <span style={{ fontSize: '24px' }}>📞</span>
+              </div>
+              <div style={{ marginTop: 'auto' }}>
+                <button
+                  type="button"
+                  onClick={() => handleSectionSwitch('callbacks')}
+                  style={{ width: '100%', background: '#f8fafc', border: '1.5px solid #cbd5e1', borderRadius: '10px', padding: '8px 12px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
+                >
+                  View Callback Queue →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── SECTION 1: PROVIDERS MANAGEMENT TABLE ─── */}
       {activeSection === 'providers' && (
         <div className={styles.tableCard}>
@@ -490,6 +660,27 @@ export const AdminView: React.FC = () => {
                 Only manually approved providers are returned in public customer queries across Mumbai.
               </span>
             </div>
+            <button
+              type="button"
+              onClick={() => setShowAddProviderModal(true)}
+              style={{
+                background: '#4f46e5',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '9px 18px',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 2px 4px rgba(79, 70, 229, 0.25)',
+              }}
+            >
+              <span>➕</span>
+              <span>Onboard New Provider</span>
+            </button>
           </div>
 
           {/* Status Sub-Tabs */}
@@ -1946,6 +2137,72 @@ export const AdminView: React.FC = () => {
                 🗑️ DELETE
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct Add Provider Modal for Admin */}
+      {showAddProviderModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAddProviderModal(false);
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '20px',
+              maxWidth: '800px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '24px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              position: 'relative',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowAddProviderModal(false)}
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                background: '#f1f5f9',
+                border: 'none',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 700,
+                color: '#64748b',
+                zIndex: 10,
+              }}
+              title="Close modal"
+            >
+              ✕
+            </button>
+            <OnboardingView
+              onRegistered={async () => {
+                setShowAddProviderModal(false);
+                await loadData();
+              }}
+            />
           </div>
         </div>
       )}

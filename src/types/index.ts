@@ -140,12 +140,15 @@ export interface AppState {
 }
 
 export type DashboardView =
+  | 'admin'
+  | 'providers'
+  | 'users'
+  | 'callbacks'
+  | 'settings'
+  | 'profile'
   | 'finder'
   | 'directory'
-  | 'onboarding'
-  | 'admin'
-  | 'profile'
-  | 'settings';
+  | 'onboarding';
 
 export type PublicView =
   | 'home'

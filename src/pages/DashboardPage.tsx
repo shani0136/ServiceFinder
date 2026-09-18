@@ -2,9 +2,6 @@ import React, { useState } from 'react';
 import { useApp } from '../store/appState';
 import { useAuth } from '../lib/auth';
 import { Sidebar } from '../components/layout/Sidebar';
-import { FinderView } from './views/FinderView';
-import { DirectoryView } from './views/DirectoryView';
-import { OnboardingView } from './views/OnboardingView';
 import { AdminView } from './views/AdminView';
 import { ProfileView } from './views/ProfileView';
 import { SettingsView } from './views/SettingsView';
@@ -33,32 +30,57 @@ export const DashboardPage: React.FC = () => {
   const renderView = () => {
     switch (state.currentView) {
       case 'admin':
-        return <AdminView />;
-      case 'directory':
-        return <DirectoryView />;
-      case 'onboarding':
-        return <OnboardingView onRegistered={() => handleNavigateView('admin')} />;
-      case 'finder':
-        return <FinderView />;
+        return (
+          <AdminView
+            initialSection="overview"
+            onSectionChange={(sec) => handleNavigateView(sec === 'overview' ? 'admin' : (sec as DashboardView))}
+          />
+        );
+      case 'providers':
+        return (
+          <AdminView
+            initialSection="providers"
+            onSectionChange={(sec) => handleNavigateView(sec === 'overview' ? 'admin' : (sec as DashboardView))}
+          />
+        );
+      case 'users':
+        return (
+          <AdminView
+            initialSection="users"
+            onSectionChange={(sec) => handleNavigateView(sec === 'overview' ? 'admin' : (sec as DashboardView))}
+          />
+        );
+      case 'callbacks':
+        return (
+          <AdminView
+            initialSection="callbacks"
+            onSectionChange={(sec) => handleNavigateView(sec === 'overview' ? 'admin' : (sec as DashboardView))}
+          />
+        );
       case 'profile':
         return <ProfileView />;
       case 'settings':
         return <SettingsView />;
       default:
-        return <AdminView />;
+        return (
+          <AdminView
+            initialSection="overview"
+            onSectionChange={(sec) => handleNavigateView(sec === 'overview' ? 'admin' : (sec as DashboardView))}
+          />
+        );
     }
   };
 
   const getViewTitle = () => {
     switch (state.currentView) {
       case 'admin':
-        return 'Admin Control Center';
-      case 'directory':
-        return 'Verified Provider Directory';
-      case 'onboarding':
-        return 'Direct Provider Onboarding';
-      case 'finder':
-        return 'AI Match Engine Preview';
+        return 'Admin Dashboard & KPIs';
+      case 'providers':
+        return 'Service Provider Verification & Registry';
+      case 'users':
+        return 'User Accounts Management';
+      case 'callbacks':
+        return 'Support Inquiries & Callbacks';
       case 'profile':
         return 'Administrator Profile';
       case 'settings':

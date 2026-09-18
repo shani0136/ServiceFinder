@@ -112,7 +112,7 @@ function MainRouter() {
       if (route === '/admin/dashboard' || route === 'admin/dashboard' || route === '/admin' || route === 'admin' || pathname === '/admin/dashboard' || pathname === '/admin') {
         if (state.user?.role === 'admin') {
           setPublicView('admin');
-          const validViews: DashboardView[] = ['admin', 'directory', 'onboarding', 'finder', 'profile', 'settings'];
+          const validViews: DashboardView[] = ['admin', 'providers', 'users', 'callbacks', 'profile', 'settings'];
           if (hash && validViews.includes(hash as DashboardView)) {
             setView(hash as DashboardView);
           } else {
