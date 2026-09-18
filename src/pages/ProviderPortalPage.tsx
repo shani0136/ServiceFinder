@@ -1902,6 +1902,14 @@ export const ProviderPortalPage: React.FC<ProviderPortalPageProps> = ({
                       >
                         🔒 Privacy Policy
                       </button>
+                      <span style={{ color: '#cbd5e1' }}>•</span>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('about')}
+                        style={{ background: 'none', border: 'none', color: '#4f46e5', fontWeight: 700, fontSize: '12px', cursor: 'pointer', padding: 0 }}
+                      >
+                        ℹ️ About Us
+                      </button>
                     </div>
                   </div>
                 </div>

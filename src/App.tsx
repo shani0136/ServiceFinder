@@ -54,9 +54,15 @@ function MainRouter() {
       setUser(authUser);
       setAuthLoading(false);
       if (authUser?.role === 'provider') {
-        setPublicView('provider');
-        if (window.location.pathname !== '/provider') {
-          window.history.replaceState(null, '', '/provider');
+        const allowedViews = ['provider', 'terms', 'privacy', 'contact', 'about'];
+        const currentPath = (window.location.pathname.toLowerCase().replace(/\/$/, '') || '').replace(/^\//, '');
+        if (allowedViews.includes(currentPath)) {
+          setPublicView(currentPath as PublicView);
+        } else {
+          setPublicView('provider');
+          if (window.location.pathname !== '/provider') {
+            window.history.replaceState(null, '', '/provider');
+          }
         }
       }
     }
@@ -65,23 +71,30 @@ function MainRouter() {
   // Support direct administrator entry via URL pathname and hash, and enforce provider isolation
   useEffect(() => {
     const syncRouteFromLocation = () => {
-      // 1. STRICT SERVICE PROVIDER ROUTE GUARD:
-      // A service provider must ONLY be able to see their own provider portal.
-      // If a provider manually enters customer URLs (/, /providers, /services, /about, /customer_home),
-      // immediately redirect them back to their own provider portal (/provider).
-      if (state.user?.role === 'provider') {
-        if (state.publicView !== 'provider') {
-          setPublicView('provider');
-        }
-        if (window.location.pathname !== '/provider') {
-          window.history.replaceState(null, '', '/provider');
-        }
-        return;
-      }
-
       const pathname = window.location.pathname.toLowerCase().replace(/\/$/, '') || '';
       const hash = window.location.hash.toLowerCase().replace(/^#\/?/, '') || '';
       const route = pathname || hash;
+
+      // 1. SERVICE PROVIDER ROUTE GUARD:
+      // A service provider CAN access provider portal (/provider) AND informational/legal pages (/contact, /terms, /privacy, /about).
+      // If a provider navigates to customer directory routes (/, /providers, /services, /customer_home),
+      // redirect them back to /provider.
+      if (state.user?.role === 'provider') {
+        const allowedProviderRoutes = [
+          '/provider', 'provider',
+          '/terms', 'terms',
+          '/privacy', 'privacy',
+          '/contact', 'contact',
+          '/about', 'about'
+        ];
+        if (!allowedProviderRoutes.includes(route)) {
+          setPublicView('provider');
+          if (window.location.pathname !== '/provider') {
+            window.history.replaceState(null, '', '/provider');
+          }
+          return;
+        }
+      }
 
       if (route === '/admin/login' || route === 'admin/login' || route === 'admin_login' || route === 'admin-login') {
         if (state.user?.role === 'admin') {
@@ -239,17 +252,26 @@ function MainRouter() {
 
   // Safe navigation handler that strictly enforces role-based access
   const handleNavigate = (view: PublicView) => {
-    // 1. STRICT PROVIDER NAVIGATION ENFORCEMENT:
-    // Providers are confined to /provider and cannot navigate to any customer discovery route
+    // 1. SERVICE PROVIDER NAVIGATION ENFORCEMENT:
+    // Providers are allowed to access Provider Portal AND informational/legal pages:
+    // contact, terms, privacy, and about.
+    // They cannot navigate to customer directory discovery pages (providers, services, customer_home).
     if (state.user?.role === 'provider') {
-      if (view !== 'provider') {
-        addToast('Service providers are restricted to the Provider Portal.', 'info');
+      const allowedProviderViews: PublicView[] = ['provider', 'contact', 'terms', 'privacy', 'about'];
+      if (!allowedProviderViews.includes(view)) {
+        // If provider clicks home/overview, gracefully return to provider portal
         setPublicView('provider');
         if (window.location.pathname !== '/provider') {
-          window.history.replaceState(null, '', '/provider');
+          window.history.pushState(null, '', '/provider');
         }
         return;
       }
+      setPublicView(view);
+      const targetPath = view === 'provider' ? '/provider' : `/${view}`;
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState(null, '', targetPath);
+      }
+      return;
     }
 
     // 2. STRICT CUSTOMER NAVIGATION ENFORCEMENT:
@@ -343,7 +365,7 @@ function MainRouter() {
 
     // Service Provider Experience: Strictly gated to Provider Portal
     // Provider CANNOT see customer directory, search, or other provider profiles,
-    // but CAN freely view legal terms, privacy policy, and contact support pages!
+    // but CAN freely view legal terms, privacy policy, contact, and about pages!
     if (state.user?.role === 'provider') {
       if (state.publicView === 'terms') {
         return <TermsPage onNavigate={handleNavigate} onSignIn={() => {}} />;
@@ -353,6 +375,9 @@ function MainRouter() {
       }
       if (state.publicView === 'contact') {
         return <ContactPage onNavigate={handleNavigate} onSignIn={() => {}} />;
+      }
+      if (state.publicView === 'about') {
+        return <AboutPage onNavigate={handleNavigate} onSignIn={() => {}} />;
       }
       return (
         <ProviderPortalPage

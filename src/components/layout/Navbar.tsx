@@ -73,7 +73,10 @@ export const Navbar: React.FC<NavbarProps> = ({
     if (onProviderNav) {
       onProviderNav(tab);
     } else {
-      window.dispatchEvent(new CustomEvent('sf_provider_portal_nav', { detail: { tab } }));
+      onNavigate('provider');
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('sf_provider_portal_nav', { detail: { tab } }));
+      }, 50);
     }
   };
 
@@ -398,6 +401,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <span>🔒</span>
                         <span>Privacy Policy</span>
                       </button>
+
+                      <button
+                        type="button"
+                        className={styles.dropdownItem}
+                        onClick={() => {
+                          setDropdownOpen(false);
+                          onNavigate('about');
+                        }}
+                      >
+                        <span>ℹ️</span>
+                        <span>About ServiceFinder</span>
+                      </button>
                     </>
                   ) : (
                     // Customer & Admin Menu Options
@@ -592,6 +607,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }}
                 >
                   🔒 Privacy Policy
+                </button>
+                <button
+                  type="button"
+                  className={styles.mobileNavLink}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onNavigate('about');
+                  }}
+                >
+                  ℹ️ About ServiceFinder
                 </button>
               </>
             ) : (
