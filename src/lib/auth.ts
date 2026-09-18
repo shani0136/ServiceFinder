@@ -859,3 +859,48 @@ export function useAuth(): UseAuthReturn {
   };
 }
 
+// ─── Update User / Admin Profile Helper ────────────────────────────────────
+export async function updateUserProfile(
+  uid: string,
+  updates: Partial<Pick<AppUser, 'name' | 'phone' | 'adminTitle' | 'department' | 'photoURL'>>
+): Promise<void> {
+  if (!DEMO_MODE && db) {
+    try {
+      const userRef = doc(db, 'users', uid);
+      await setDoc(userRef, {
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+
+      try {
+        const adminRef = doc(db, 'admins', uid);
+        await setDoc(adminRef, {
+          ...updates,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch {
+        // non-blocking
+      }
+    } catch (err) {
+      console.warn('[auth] updateUserProfile Firestore warning:', err);
+    }
+  }
+
+  try {
+    const all = getStoredUsers();
+    if (all[uid]) {
+      all[uid] = { ...all[uid], ...updates };
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(all));
+    }
+    const sessionRaw = localStorage.getItem(DEMO_STORAGE_KEY);
+    if (sessionRaw) {
+      const session = JSON.parse(sessionRaw);
+      if (session.uid === uid) {
+        localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify({ ...session, ...updates }));
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+

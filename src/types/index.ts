@@ -96,6 +96,8 @@ export interface AppUser {
   phone?: string;
   status?: string;
   createdAt?: string;
+  adminTitle?: string;
+  department?: string;
 }
 
 // ─── Gemini / AI ─────────────────────────────────────────────────────────────
