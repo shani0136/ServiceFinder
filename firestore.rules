@@ -35,8 +35,8 @@ service cloud.firestore {
     }
 
     // ─── 2. Centralized Service & Location Catalog Validations ────────────────
-    function isAllowedService(service) {
-      return service in [
+    function isAllowedService(serviceName) {
+      return serviceName in [
         'Electrician',
         'Plumber',
         'Carpenter',
@@ -54,8 +54,8 @@ service cloud.firestore {
       ];
     }
 
-    function isAllowedLocation(loc) {
-      return loc in [
+    function isAllowedLocation(locationName) {
+      return locationName in [
         'Churchgate',
         'Marine Lines',
         'Charni Road',
